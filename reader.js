@@ -5,7 +5,7 @@
   const PREFS_KEY = "maxquill:reader-preferences";
   const MODE_KEY = "maxquill:reader-mode";
   const defaults = { theme: "dark", fontSize: "medium", textWidth: "normal", lineHeight: "normal" };
-  let book, chapter, sourcePackage, progress, review, pendingSelection = null, editingId = null, scrollTimer;
+  let book, chapter, sourcePackage, progress, review, pendingSelection = null, editingId = null, scrollTimer, selectionTimer, actionEngaged = false;
 
   function readStorage(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (error) { console.warn(`Could not read ${key}.`, error); return fallback; } }
   function writeStorage(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { console.warn(`Could not save ${key}.`, error); } }
@@ -15,6 +15,7 @@
   function chapterUrl(item) { return `reader.html?book=${encodeURIComponent(book.id)}&chapter=${item.number}&version=${item.version}`; }
   function packageUrl(bookId, number, version) { return `content/books/${encodeURIComponent(bookId)}/review/chapter_${String(number).padStart(4, "0")}_v${version}.json`; }
   function showMessage(selector, message) { const node = document.querySelector(selector); node.textContent = message; node.hidden = !message; }
+  function hideSelectionActions(clearSelection = false) { document.querySelector("#selection-actions").hidden = true; if (clearSelection) pendingSelection = null; }
 
   function applyPreferences(preferences) {
     const root = document.documentElement;
@@ -33,7 +34,7 @@
     const next = mode === "review" ? "review" : "read";
     document.documentElement.dataset.readerMode = next; writeStorage(MODE_KEY, next);
     document.querySelectorAll("[data-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === next)));
-    document.querySelector("#review-bar").hidden = next !== "review"; document.querySelector("#selection-actions").hidden = true;
+    document.querySelector("#review-bar").hidden = next !== "review"; hideSelectionActions(true); showMessage("#selection-message", "");
     window.getSelection()?.removeAllRanges(); renderParagraphs();
   }
   function setupModes() { document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode))); setMode(readStorage(MODE_KEY, "read")); }
@@ -61,9 +62,19 @@
     const beforeStart = range.cloneRange(), beforeEnd = range.cloneRange(); beforeStart.selectNodeContents(startParagraph); beforeStart.setEnd(range.startContainer, range.startOffset); beforeEnd.selectNodeContents(startParagraph); beforeEnd.setEnd(range.endContainer, range.endOffset);
     const selectionStart = Math.min(beforeStart.toString().length, beforeEnd.toString().length), selectionEnd = Math.max(beforeStart.toString().length, beforeEnd.toString().length); if (selectionStart === selectionEnd) return null;
     const paragraph = sourcePackage.content.find((item) => item.id === startParagraph.dataset.paragraphId); if (!paragraph) return null;
-    return { paragraphId: paragraph.id, selectedText: paragraph.text.substring(selectionStart, selectionEnd), selectionStart, selectionEnd, rect: range.getBoundingClientRect() };
+    const candidate = { paragraphId: paragraph.id, startParagraphId: startParagraph.dataset.paragraphId, endParagraphId: endParagraph.dataset.paragraphId, selectedText: paragraph.text.substring(selectionStart, selectionEnd), selectionStart, selectionEnd, rect: range.getBoundingClientRect() };
+    return MaxQuillSelectionLogic.validateSelectionCandidate(sourcePackage, candidate).valid ? candidate : null;
   }
-  function captureSelection() { window.setTimeout(() => { const details = selectionDetails(), actions = document.querySelector("#selection-actions"), selection = window.getSelection(); if (!details) { actions.hidden = true; if (selection && !selection.isCollapsed) showMessage("#review-message", "Select text within a single paragraph to add a note."); return; } showMessage("#review-message", ""); pendingSelection = details; actions.hidden = false; actions.style.left = `${Math.max(8, Math.min(innerWidth - actions.offsetWidth - 8, details.rect.left + details.rect.width / 2 - actions.offsetWidth / 2))}px`; actions.style.top = `${Math.max(8, details.rect.top - actions.offsetHeight - 10)}px`; }, 20); }
+  function readSelectionState() {
+    if (document.querySelector("#annotation-dialog").open || document.querySelector("#review-panel").open) return;
+    if (document.documentElement.dataset.readerMode !== "review") { hideSelectionActions(true); showMessage("#selection-message", ""); return; }
+    const selection = window.getSelection(), actions = document.querySelector("#selection-actions"), details = selectionDetails();
+    if (!selection || selection.isCollapsed) { if (!actionEngaged) hideSelectionActions(true); showMessage("#selection-message", ""); return; }
+    if (!details) { hideSelectionActions(true); showMessage("#selection-message", "Select text within one paragraph to add a review note."); return; }
+    showMessage("#selection-message", ""); pendingSelection = details; document.querySelector("#selection-preview").textContent = details.selectedText; actions.hidden = false;
+    if (!matchMedia("(hover: none), (pointer: coarse)").matches) { const width = actions.offsetWidth, height = actions.offsetHeight; actions.style.left = `${Math.max(8, Math.min(innerWidth - width - 8, details.rect.left + details.rect.width / 2 - width / 2))}px`; actions.style.top = `${Math.max(8, Math.min(innerHeight - height - 8, details.rect.top - height - 10))}px`; }
+  }
+  function handleTextSelection(delay = 320) { clearTimeout(selectionTimer); selectionTimer = setTimeout(readSelectionState, delay); }
   function annotationId() { return crypto.randomUUID ? `annotation-${crypto.randomUUID()}` : `annotation-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
   function openEditor(note = null, defaultCategory = "wording") {
     editingId = note?.id || null; const source = note || pendingSelection; if (!source) return; showMessage("#annotation-message", "");
@@ -79,7 +90,7 @@
     if (existing) Object.assign(existing, annotation); else review.annotations.push(annotation); review.completed = false; saveReview(); closeEditor(); renderParagraphs();
   }
   function quickFlag() { if (!pendingSelection) return; openEditor(null, "other"); document.querySelector("#annotation-comment").value = "Flagged for revision."; }
-  function closeEditor() { document.querySelector("#annotation-dialog").close(); document.querySelector("#selection-actions").hidden = true; window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; }
+  function closeEditor() { document.querySelector("#annotation-dialog").close(); hideSelectionActions(true); window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; actionEngaged = false; }
   function deleteAnnotation() { if (!editingId) return; review.annotations = review.annotations.filter((note) => note.id !== editingId); review.completed = false; saveReview(); closeEditor(); renderParagraphs(); }
   function updateReviewUi() {
     if (!review || !sourcePackage) return; document.querySelector("#review-chapter-status").textContent = `Review Candidate · Version ${sourcePackage.chapterVersion}`; document.querySelector("#open-note-count").textContent = `Review Notes · ${review.annotations.length}`; document.querySelector('[data-mode="review"]').textContent = review.annotations.length ? `Review (${review.annotations.length})` : "Review";
@@ -94,14 +105,18 @@
     const blob = new Blob([JSON.stringify(reviewPackage, null, 2)], { type: "application/json" }), url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = `${sourcePackage.bookId}-${sourcePackage.chapterId}-v${sourcePackage.chapterVersion}-owner-review.json`; document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function setupReview() {
-    document.querySelector("#chapter-body").addEventListener("pointerup", captureSelection); document.querySelector("#chapter-body").addEventListener("keyup", captureSelection); document.querySelector("#chapter-body").addEventListener("click", (event) => { const mark = event.target.closest("[data-annotation-id]"); if (mark) openEditor(review.annotations.find((note) => note.id === mark.dataset.annotationId)); });
-    document.querySelector("#selection-actions").addEventListener("click", (event) => { if (event.target.dataset.selectionAction === "comment") openEditor(); if (event.target.dataset.selectionAction === "flag") quickFlag(); }); document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelectorAll("#export-review, #panel-export").forEach((button) => button.addEventListener("click", exportReview)); document.querySelector("#finish-review").addEventListener("click", finishReview); updateReviewUi();
+    const body = document.querySelector("#chapter-body"), actions = document.querySelector("#selection-actions");
+    body.addEventListener("pointerup", () => handleTextSelection(40)); body.addEventListener("keyup", () => handleTextSelection(40)); document.addEventListener("selectionchange", () => handleTextSelection(320));
+    body.addEventListener("click", (event) => { const mark = event.target.closest("[data-annotation-id]"); if (mark) openEditor(review.annotations.find((note) => note.id === mark.dataset.annotationId)); });
+    actions.addEventListener("pointerdown", () => { actionEngaged = true; }); actions.addEventListener("click", (event) => { if (event.target.dataset.selectionAction === "comment") openEditor(); if (event.target.dataset.selectionAction === "flag") quickFlag(); actionEngaged = false; });
+    addEventListener("scroll", () => { hideSelectionActions(false); showMessage("#selection-message", ""); }, { passive: true }); addEventListener("resize", () => { hideSelectionActions(false); handleTextSelection(180); }); addEventListener("orientationchange", () => { hideSelectionActions(false); handleTextSelection(250); });
+    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelectorAll("#export-review, #panel-export").forEach((button) => button.addEventListener("click", exportReview)); document.querySelector("#finish-review").addEventListener("click", finishReview); updateReviewUi();
   }
   function saveProgress(markRead = false) { const read = new Set(progress.readChapters || []); if (markRead) read.add(String(sourcePackage.chapterNumber)); const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight); progress = { bookId: book.id, currentChapter: String(sourcePackage.chapterNumber), readingProgress: Math.min(1, scrollY / maxScroll), lastOpened: new Date().toISOString(), readChapters: [...read], scrollPositions: { ...(progress.scrollPositions || {}), [sourcePackage.chapterId]: Math.round(scrollY) } }; writeStorage(PROGRESS_KEY, progress); }
   function setupProgress() { const saved = Number(progress.scrollPositions?.[sourcePackage.chapterId] || 0); requestAnimationFrame(() => scrollTo({ top: saved, behavior: "instant" })); addEventListener("scroll", () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { const max = Math.max(1, document.documentElement.scrollHeight - innerHeight); saveProgress(scrollY / max >= .88); }, 400); }, { passive: true }); addEventListener("pagehide", () => saveProgress()); document.querySelectorAll("[data-next-chapter]").forEach((link) => link.addEventListener("click", () => saveProgress(true))); }
   async function init() {
     setupSettings(); try {
-      if (!window.MaxQuillReviewContract) throw new Error("Review contract validator is unavailable."); const bookResponse = await fetch(BOOK_URL); if (!bookResponse.ok) throw new Error(`Book data returned ${bookResponse.status}`); book = await bookResponse.json();
+      if (!window.MaxQuillReviewContract || !window.MaxQuillSelectionLogic) throw new Error("Review validation support is unavailable."); const bookResponse = await fetch(BOOK_URL); if (!bookResponse.ok) throw new Error(`Book data returned ${bookResponse.status}`); book = await bookResponse.json();
       const params = new URLSearchParams(location.search), requestedBook = params.get("book") || book.id, requestedNumber = Number.parseInt(params.get("chapter") || String(book.chapters[0].number), 10); chapter = book.chapters.find((item) => item.number === requestedNumber); if (requestedBook !== book.id || !chapter) throw new Error("The requested review candidate is not available."); const version = Number.parseInt(params.get("version") || String(chapter.version), 10); if (!Number.isInteger(version) || version < 1) throw new Error("The requested chapter version is invalid.");
       const response = await fetch(packageUrl(requestedBook, requestedNumber, version)); if (!response.ok) throw new Error(`Review candidate returned ${response.status}`); sourcePackage = await response.json(); const validation = MaxQuillReviewContract.validateReviewReadyPackage(sourcePackage); if (!validation.valid) throw new Error(`Contract validation failed: ${validation.errors.join(" ")}`); if (sourcePackage.bookId !== requestedBook || sourcePackage.chapterNumber !== requestedNumber || sourcePackage.chapterVersion !== version || sourcePackage.chapterId !== chapter.chapterId) throw new Error("Contract validation failed: package identity does not match the requested review candidate.");
       progress = readStorage(PROGRESS_KEY, { bookId: book.id, readChapters: [], scrollPositions: {} }); review = readStorage(reviewKey(), newReview()); if (!review || typeof review !== "object" || !Array.isArray(review.annotations) || typeof review.completed !== "boolean") review = newReview(); document.title = `Chapter ${sourcePackage.chapterNumber}: ${sourcePackage.title} | MaxQuill`; renderReader(); setupModes(); setupReview(); saveProgress(); setupProgress();

@@ -36,9 +36,11 @@
   </div>
 
   <div class="selection-actions" id="selection-actions" hidden>
+    <span class="selection-preview" id="selection-preview"></span>
     <button type="button" data-selection-action="comment">Comment</button>
     <button type="button" data-selection-action="flag">Flag</button>
   </div>
+  <p class="selection-message" id="selection-message" role="status" hidden></p>
 
   <main id="reader-content" aria-live="polite"><p class="loading reader-loading">Opening chapter&hellip;</p></main>
 
@@ -67,6 +69,7 @@
   </dialog>
 
   <script src="contract.js" defer></script>
+  <script src="selection-logic.js" defer></script>
   <script src="reader.js" defer></script>
 </body>
 </html>
