@@ -6,7 +6,8 @@ MaxQuill Web is a static private-reader MVP for immersive serialized fiction.
 
 - Reading Mode with library, book details, responsive chapters, progress, and reader preferences
 - Review Mode with stable paragraph IDs, text annotations, editing, navigation, and review completion
-- Version-bound owner notes with local persistence and JSON Review Package export
+- Direct, validated Architecture `REVIEW_READY_PACKAGE` loading
+- Version-bound owner notes and validated `OWNER_REVIEW_PACKAGE` export
 - Continue Reading and per-chapter scroll restoration
 
 ## Local preview
@@ -15,7 +16,7 @@ Serve the repository root with a static HTTP server, for example `python -m http
 
 ## Content structure
 
-Book metadata lives in `content/<book-id>/book.json`; chapters with status, version, and stable paragraph IDs live in `content/<book-id>/chapters/`. The small static format is suitable for automated generation. Reading and review data remain in namespaced browser `localStorage` until a backend exists.
+Demo book metadata lives in `content/demo-book/book.json`. Review candidates use the Architecture-owned contract at `content/books/<book-id>/review/chapter_####_v#.json`. MaxQuill preserves supplied paragraph IDs and stores review state in version-bound browser `localStorage`.
 
 ## Cloudflare Pages
 
@@ -23,4 +24,4 @@ Deploy the repository root with no framework preset, build command, output direc
 
 ## Future
 
-Backend and Book Repository integration are future work. See `docs/review-integration.md` for the intended owner-review handoff.
+MaxQuill is an external owner-review client; the book repository remains the canonical source of truth. See `docs/review-integration.md` for the contract-exact handoff.

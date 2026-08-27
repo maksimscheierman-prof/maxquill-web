@@ -47,9 +47,13 @@
       <div class="panel-heading"><div><p class="eyebrow">Owner review note</p><h2 id="annotation-title">Add annotation</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close annotation editor">&times;</button></div>
       <blockquote id="annotation-quote"></blockquote>
       <label for="annotation-type">Category</label>
-      <select id="annotation-type" name="type"><option value="flag">Flag</option><option value="wording">Wording</option><option value="style">Style</option><option value="dialogue">Dialogue</option><option value="continuity">Continuity</option><option value="logic">Logic</option><option value="pacing">Pacing</option><option value="other">Other</option></select>
-      <label for="annotation-comment">Comment <span>(optional)</span></label>
-      <textarea id="annotation-comment" name="comment" rows="5" placeholder="What needs attention?"></textarea>
+      <select id="annotation-type" name="category"><option value="wording">Wording</option><option value="clarity">Clarity</option><option value="pacing">Pacing</option><option value="dialogue">Dialogue</option><option value="continuity">Continuity</option><option value="canon">Canon</option><option value="style">Style</option><option value="other">Other</option></select>
+      <label for="annotation-comment">Comment</label>
+      <textarea id="annotation-comment" name="comment" rows="5" placeholder="What needs attention?" required></textarea>
+      <label for="annotation-status">Status</label>
+      <select id="annotation-status" name="status"><option value="open">Open</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="resolved">Resolved</option></select>
+      <label class="checkbox-label"><input id="requires-canon-change" name="requiresCanonChange" type="checkbox"> Requires canon change</label>
+      <p class="form-message" id="annotation-message" role="alert" hidden></p>
       <div class="dialog-actions"><button class="danger-button" type="button" id="delete-annotation" hidden>Delete</button><button type="button" data-close-dialog>Cancel</button><button class="save-button" type="submit">Save note</button></div>
     </form>
   </dialog>
@@ -57,10 +61,12 @@
   <dialog class="review-panel" id="review-panel" aria-labelledby="review-panel-title">
     <div class="panel-heading"><div><p class="eyebrow">Current chapter</p><h2 id="review-panel-title">Review Notes</h2></div><button class="icon-button" type="button" data-close-panel aria-label="Close review notes">&times;</button></div>
     <div id="review-summary"></div>
+    <p class="form-message" id="review-message" role="alert" hidden></p>
     <ol class="review-note-list" id="review-note-list"></ol>
     <div class="review-panel-actions"><button type="button" id="panel-export">Export Review</button><button class="save-button" type="button" id="finish-review">Finish Review</button></div>
   </dialog>
 
+  <script src="contract.js" defer></script>
   <script src="reader.js" defer></script>
 </body>
 </html>

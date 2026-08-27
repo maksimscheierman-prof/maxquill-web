@@ -2,53 +2,22 @@
 
 ```text
 Book Architecture
-    -> REVIEW_READY chapter
-    -> MaxQuill Private Review
-    -> Owner Review Package
-    -> Revision Pipeline
+    -> REVIEW_READY_PACKAGE
+    -> MaxQuill
+    -> OWNER_REVIEW_PACKAGE
+    -> Architecture Import
 ```
 
-The Book Repository remains the source of truth. MaxQuill never changes manuscript or canon data; it stores owner annotations separately and exports them for an external revision workflow.
+MaxQuill is an external owner-review client. The book repository remains the canonical source of truth. MaxQuill does not change canon, revise or finalize chapters, update memory, publish, or reconcile annotations between versions.
 
-## Chapter input
+## Review candidates
 
-Every review candidate declares `status: "REVIEW_READY"`, a numeric `version`, and stable paragraph objects shaped as `{ "id": "p001", "text": "..." }`. Notes are bound to that exact chapter version. A newer version receives a separate local namespace and does not inherit old highlights automatically.
+The reader loads Architecture schema-version-1 packages directly from `content/books/<book-id>/review/chapter_####_v#.json`. It validates the exact top-level and paragraph fields before rendering. Invalid packages are rejected without repair. Supplied paragraph IDs and order remain unchanged.
 
-## Owner Review Package
+Demo links use `reader.html?book=demo-book&chapter=1&version=1`. Local annotations use `maxquill.review.<bookId>.<chapterId>.v<chapterVersion>`, so notes never transfer automatically between versions.
 
-Exported JSON uses this shape:
+## Owner review export
 
-```json
-{
-  "schemaVersion": 1,
-  "source": "owner",
-  "bookId": "demo-book",
-  "chapter": 1,
-  "chapterVersion": 1,
-  "chapterStatus": "REVIEW_READY",
-  "ownerReviewStatus": "completed",
-  "reviewStartedAt": "ISO-8601 timestamp",
-  "lastReviewedAt": "ISO-8601 timestamp",
-  "completedAt": "ISO-8601 timestamp",
-  "reviewedAt": "ISO-8601 timestamp",
-  "annotations": [
-    {
-      "id": "annotation-uuid",
-      "source": "owner",
-      "bookId": "demo-book",
-      "chapter": 1,
-      "chapterVersion": 1,
-      "paragraphId": "p001",
-      "selectedText": "Selected manuscript text",
-      "selectionStart": 0,
-      "selectionEnd": 24,
-      "type": "wording",
-      "comment": "Optional owner comment",
-      "status": "open",
-      "createdAt": "ISO-8601 timestamp"
-    }
-  ]
-}
-```
+After Finish Review, MaxQuill constructs and validates an `OWNER_REVIEW_PACKAGE` containing only `schemaVersion`, `type`, `source`, chapter identity/version fields, `reviewedAt`, `reviewStatus`, and `annotations`. Each annotation contains only the contract-defined selection, category, comment, status, and canon-change fields. A download is blocked if its IDs, offsets, selected text, fields, or values fail validation.
 
-The revision pipeline should treat `source: "owner"` as explicit owner feedback. Import, reconciliation, revision execution, and finalization are outside MaxQuill's current scope.
+The exported package returns to the Book Architecture for import and any owner-authorized revision. MaxQuill itself never writes to the book repository.
