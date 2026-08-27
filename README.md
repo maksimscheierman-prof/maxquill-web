@@ -9,6 +9,7 @@ MaxQuill Web is a static private-reader MVP for immersive serialized fiction.
 - Direct, validated Architecture `REVIEW_READY_PACKAGE` loading
 - Version-bound owner notes and validated `OWNER_REVIEW_PACKAGE` export
 - Continue Reading and per-chapter scroll restoration
+- Cloudflare Pages Functions review queue with D1 migrations and private owner/worker authentication
 
 ## Local preview
 
@@ -20,7 +21,7 @@ Demo book metadata lives in `content/demo-book/book.json`. Review candidates use
 
 ## Cloudflare Pages
 
-Deploy the repository root with no framework preset, build command, output directory, or environment variables.
+Deploy the repository root with no framework preset or build command. The reader stays static; Pages Functions under `/api/*` provide the optional Backend V1 review queue after its D1 binding, Access variables, and worker secret are configured. See `docs/backend-v1.md`.
 
 ## Future
 
