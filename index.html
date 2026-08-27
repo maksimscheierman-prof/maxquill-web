@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MaxQuill is a home for immersive serialized fiction, designed for comfortable long-form reading.">
+  <meta name="theme-color" content="#0c0b0a">
+  <title>MaxQuill — Original Serialized Fiction</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #0c0b0a;
+      --surface: #141210;
+      --surface-soft: #1a1713;
+      --text: #eee8dc;
+      --muted: #aaa195;
+      --accent: #c9a96e;
+      --accent-soft: rgba(201, 169, 110, 0.14);
+      --line: rgba(238, 232, 220, 0.12);
+      --serif: Georgia, "Times New Roman", Times, serif;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--background);
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 78% 14%, rgba(201, 169, 110, 0.07), transparent 32rem),
+        var(--background);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 1rem;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-shell {
+      width: min(100% - 3rem, 72rem);
+      margin-inline: auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 7rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+    }
+
+    .brand-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    main {
+      padding-block: clamp(5rem, 10vw, 9rem) clamp(6rem, 12vw, 10rem);
+    }
+
+    .hero {
+      max-width: 55rem;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin: 0 0 1.5rem;
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 2.5rem;
+      height: 1px;
+      background: var(--accent);
+      content: "";
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--serif);
+      font-weight: 400;
+      line-height: 1.08;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 12ch;
+      margin: 0;
+      font-size: clamp(3.4rem, 8.5vw, 7.2rem);
+      letter-spacing: -0.045em;
+    }
+
+    .intro {
+      max-width: 44rem;
+      margin: 2.25rem 0 0;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 2vw, 1.3rem);
+      line-height: 1.75;
+    }
+
+    .library {
+      margin-top: clamp(7rem, 14vw, 12rem);
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+    }
+
+    .section-count {
+      color: var(--muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .book-card {
+      display: grid;
+      grid-template-columns: minmax(10rem, 0.75fr) 2fr;
+      min-height: 22rem;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: rgba(20, 18, 16, 0.72);
+    }
+
+    .book-cover {
+      display: grid;
+      min-height: 100%;
+      place-items: center;
+      border-right: 1px solid var(--line);
+      background:
+        linear-gradient(145deg, transparent 35%, rgba(201, 169, 110, 0.07)),
+        var(--surface-soft);
+    }
+
+    .monogram {
+      display: grid;
+      width: 5rem;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid rgba(201, 169, 110, 0.5);
+      color: var(--accent);
+      font-family: var(--serif);
+      font-size: 1.7rem;
+      letter-spacing: 0.08em;
+      transform: rotate(45deg);
+    }
+
+    .monogram span {
+      transform: rotate(-45deg);
+    }
+
+    .book-details {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: clamp(2.25rem, 6vw, 5rem);
+    }
+
+    .status {
+      width: fit-content;
+      margin: 0 0 1.5rem;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.7rem;
+      font-weight: 650;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+    }
+
+    .book-description {
+      max-width: 34rem;
+      margin: 1.25rem 0 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    footer {
+      padding-block: 2rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+    }
+
+    @media (max-width: 44rem) {
+      .page-shell {
+        width: min(100% - 2rem, 72rem);
+      }
+
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.25rem;
+        min-height: 6.5rem;
+      }
+
+      main {
+        padding-top: 4.5rem;
+      }
+
+      h1 {
+        font-size: clamp(3.2rem, 17vw, 5rem);
+      }
+
+      .section-count {
+        display: none;
+      }
+
+      .book-card {
+        grid-template-columns: 1fr;
+      }
+
+      .book-cover {
+        min-height: 15rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .book-details {
+        min-height: 18rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header>
+      <p class="brand">MAXQUILL</p>
+      <p class="brand-note">Original serialized fiction</p>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">A home for immersive serialized fiction</p>
+        <h1 id="hero-title">Stories without limits.</h1>
+        <p class="intro">MaxQuill is being built for immersive, long-form fiction — designed for comfortable reading from the first chapter to the thousandth.</p>
+      </section>
+
+      <section class="library" aria-labelledby="library-title">
+        <div class="section-heading">
+          <h2 id="library-title">Coming to MaxQuill</h2>
+          <span class="section-count" aria-hidden="true">Library preview · 01</span>
+        </div>
+
+        <article class="book-card">
+          <div class="book-cover" aria-hidden="true">
+            <div class="monogram"><span>MQ</span></div>
+          </div>
+          <div class="book-details">
+            <p class="status">Coming soon</p>
+            <h3>First Series</h3>
+            <p class="book-description">The first MaxQuill original is currently in development. Your library will begin here.</p>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer>© 2026 MaxQuill · Early preview</footer>
+  </div>
+</body>
+</html>
