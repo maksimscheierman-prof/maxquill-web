@@ -1,6 +1,66 @@
-<!doctype html><html lang="en" data-reader-theme="dark" data-font-size="medium" data-text-width="normal" data-line-height="normal"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Read serialized fiction on MaxQuill."><meta name="theme-color" content="#0c0b0a"><title>Reader | MaxQuill</title><link rel="stylesheet" href="styles.css"></head>
-<body class="reader-page"><header class="reader-header"><a class="wordmark" href="index.html">MAXQUILL</a><button class="settings-toggle" type="button" aria-expanded="false" aria-controls="reader-settings">Reading settings</button></header><aside class="reader-settings" id="reader-settings" aria-label="Reading settings" hidden>
-<div class="setting-group"><span id="theme-label">Theme</span><div class="segmented" role="group" aria-labelledby="theme-label"><button type="button" data-setting="theme" data-value="dark">Dark</button><button type="button" data-setting="theme" data-value="light">Light</button><button type="button" data-setting="theme" data-value="sepia">Sepia</button></div></div>
-<div class="setting-group"><span id="font-label">Font size</span><div class="segmented" role="group" aria-labelledby="font-label"><button type="button" data-setting="fontSize" data-value="small">Small</button><button type="button" data-setting="fontSize" data-value="medium">Medium</button><button type="button" data-setting="fontSize" data-value="large">Large</button><button type="button" data-setting="fontSize" data-value="xlarge">Extra large</button></div></div>
-<div class="setting-group"><span id="width-label">Text width</span><div class="segmented" role="group" aria-labelledby="width-label"><button type="button" data-setting="textWidth" data-value="narrow">Narrow</button><button type="button" data-setting="textWidth" data-value="normal">Normal</button><button type="button" data-setting="textWidth" data-value="wide">Wide</button></div></div>
-<div class="setting-group"><span id="line-label">Line height</span><div class="segmented" role="group" aria-labelledby="line-label"><button type="button" data-setting="lineHeight" data-value="compact">Compact</button><button type="button" data-setting="lineHeight" data-value="normal">Normal</button><button type="button" data-setting="lineHeight" data-value="relaxed">Relaxed</button></div></div></aside><main id="reader-content" aria-live="polite"><p class="loading reader-loading">Opening chapter&hellip;</p></main><script src="reader.js" defer></script></body></html>
+<!doctype html>
+<html lang="en" data-reader-theme="dark" data-font-size="medium" data-text-width="normal" data-line-height="normal" data-reader-mode="read">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Read and privately review serialized fiction on MaxQuill.">
+  <meta name="theme-color" content="#0c0b0a">
+  <title>Reader | MaxQuill</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="reader-page">
+  <header class="reader-header">
+    <a class="wordmark" href="index.html" aria-label="MaxQuill library">MAXQUILL</a>
+    <div class="reader-controls">
+      <div class="mode-switch" role="group" aria-label="Reader mode">
+        <button type="button" data-mode="read">Read</button>
+        <button type="button" data-mode="review">Review</button>
+      </div>
+      <button class="settings-toggle" type="button" aria-expanded="false" aria-controls="reader-settings">Text</button>
+    </div>
+  </header>
+
+  <aside class="reader-settings" id="reader-settings" aria-label="Reading settings" hidden>
+    <div class="setting-group"><span id="theme-label">Theme</span><div class="segmented" role="group" aria-labelledby="theme-label"><button type="button" data-setting="theme" data-value="dark">Dark</button><button type="button" data-setting="theme" data-value="light">Light</button><button type="button" data-setting="theme" data-value="sepia">Sepia</button></div></div>
+    <div class="setting-group"><span id="font-label">Font size</span><div class="segmented" role="group" aria-labelledby="font-label"><button type="button" data-setting="fontSize" data-value="small">Small</button><button type="button" data-setting="fontSize" data-value="medium">Medium</button><button type="button" data-setting="fontSize" data-value="large">Large</button><button type="button" data-setting="fontSize" data-value="xlarge">Extra large</button></div></div>
+    <div class="setting-group"><span id="width-label">Text width</span><div class="segmented" role="group" aria-labelledby="width-label"><button type="button" data-setting="textWidth" data-value="narrow">Narrow</button><button type="button" data-setting="textWidth" data-value="normal">Normal</button><button type="button" data-setting="textWidth" data-value="wide">Wide</button></div></div>
+    <div class="setting-group"><span id="line-label">Line height</span><div class="segmented" role="group" aria-labelledby="line-label"><button type="button" data-setting="lineHeight" data-value="compact">Compact</button><button type="button" data-setting="lineHeight" data-value="normal">Normal</button><button type="button" data-setting="lineHeight" data-value="relaxed">Relaxed</button></div></div>
+  </aside>
+
+  <div class="review-bar" id="review-bar" hidden>
+    <div><span id="review-chapter-status">Review Candidate</span><strong id="open-note-count">Open notes: 0</strong></div>
+    <div>
+      <button type="button" id="open-review-panel">Review notes</button>
+      <button type="button" id="export-review">Export Review</button>
+    </div>
+  </div>
+
+  <div class="selection-actions" id="selection-actions" hidden>
+    <button type="button" data-selection-action="comment">Comment</button>
+    <button type="button" data-selection-action="flag">Flag</button>
+  </div>
+
+  <main id="reader-content" aria-live="polite"><p class="loading reader-loading">Opening chapter&hellip;</p></main>
+
+  <dialog class="annotation-dialog" id="annotation-dialog" aria-labelledby="annotation-title">
+    <form method="dialog" id="annotation-form">
+      <div class="panel-heading"><div><p class="eyebrow">Owner review note</p><h2 id="annotation-title">Add annotation</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close annotation editor">&times;</button></div>
+      <blockquote id="annotation-quote"></blockquote>
+      <label for="annotation-type">Category</label>
+      <select id="annotation-type" name="type"><option value="flag">Flag</option><option value="wording">Wording</option><option value="style">Style</option><option value="dialogue">Dialogue</option><option value="continuity">Continuity</option><option value="logic">Logic</option><option value="pacing">Pacing</option><option value="other">Other</option></select>
+      <label for="annotation-comment">Comment <span>(optional)</span></label>
+      <textarea id="annotation-comment" name="comment" rows="5" placeholder="What needs attention?"></textarea>
+      <div class="dialog-actions"><button class="danger-button" type="button" id="delete-annotation" hidden>Delete</button><button type="button" data-close-dialog>Cancel</button><button class="save-button" type="submit">Save note</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="review-panel" id="review-panel" aria-labelledby="review-panel-title">
+    <div class="panel-heading"><div><p class="eyebrow">Current chapter</p><h2 id="review-panel-title">Review Notes</h2></div><button class="icon-button" type="button" data-close-panel aria-label="Close review notes">&times;</button></div>
+    <div id="review-summary"></div>
+    <ol class="review-note-list" id="review-note-list"></ol>
+    <div class="review-panel-actions"><button type="button" id="panel-export">Export Review</button><button class="save-button" type="button" id="finish-review">Finish Review</button></div>
+  </dialog>
+
+  <script src="reader.js" defer></script>
+</body>
+</html>
