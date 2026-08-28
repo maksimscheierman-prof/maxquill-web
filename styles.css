@@ -10,3 +10,13 @@
 /* Device-independent review selection actions */
 .selection-preview{display:none}.selection-message{position:fixed;z-index:6;left:50%;bottom:1rem;max-width:calc(100% - 2rem);margin:0;padding:.65rem .85rem;border:1px solid var(--line);background:var(--raised);color:var(--reader-muted);font-size:.78rem;transform:translateX(-50%)}.selection-message[hidden]{display:none}
 @media(hover:none),(pointer:coarse){.selection-actions{right:0!important;bottom:0!important;left:0!important;top:auto!important;display:grid;grid-template-columns:1fr 1fr;gap:.5rem;width:100%;padding:.65rem max(1rem,env(safe-area-inset-right)) calc(.65rem + env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left));border-width:1px 0 0;border-radius:0;background:var(--raised)}.selection-actions[hidden]{display:none}.selection-preview{display:block;grid-column:1/-1;overflow:hidden;color:var(--reader-muted);font-family:var(--serif);font-size:.85rem;text-overflow:ellipsis;white-space:nowrap}.selection-actions button{min-height:3rem}.selection-message{bottom:calc(1rem + env(safe-area-inset-bottom))}}
+
+/* Owner review submission */
+.review-job-status{display:grid;gap:.2rem;margin:1rem 0;padding:1rem;border:1px solid var(--line);background:rgba(201,169,110,.07)}
+.review-job-status strong{font-family:var(--serif);font-size:1.15rem}
+.review-job-status span{color:var(--reader-muted);font-size:.82rem}
+.review-job-status .is-ready{color:var(--accent);font-weight:700}
+.review-job-status .is-failed{color:#d99a91}
+.review-panel-actions .submit-button{min-height:3.15rem;border-color:var(--accent);background:var(--accent);color:var(--reader-bg);font-weight:700}
+.review-panel-actions button:disabled{cursor:not-allowed;opacity:.55}
+@media(max-width:30rem){.review-panel-actions{display:grid;grid-template-columns:1fr;margin-inline:-1.25rem;padding:1rem 1.25rem calc(1rem + env(safe-area-inset-bottom))}.review-panel-actions .submit-button{grid-row:1}.review-panel-actions button{width:100%}}

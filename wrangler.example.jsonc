@@ -7,7 +7,7 @@
     {
       "binding": "DB",
       "database_name": "maxquill-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "a7920c80-49a8-4520-96f0-5d063f979b8a",
       "migrations_dir": "migrations"
     }
   ]

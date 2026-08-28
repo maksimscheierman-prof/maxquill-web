@@ -63,13 +63,19 @@
   <dialog class="review-panel" id="review-panel" aria-labelledby="review-panel-title">
     <div class="panel-heading"><div><p class="eyebrow">Current chapter</p><h2 id="review-panel-title">Review Notes</h2></div><button class="icon-button" type="button" data-close-panel aria-label="Close review notes">&times;</button></div>
     <div id="review-summary"></div>
+    <section class="review-job-status" id="review-job-status" aria-live="polite">
+      <strong>Review complete</strong>
+      <span id="submission-state">Not submitted</span>
+      <span id="queue-status" hidden></span>
+    </section>
     <p class="form-message" id="review-message" role="alert" hidden></p>
     <ol class="review-note-list" id="review-note-list"></ol>
-    <div class="review-panel-actions"><button type="button" id="panel-export">Export Review</button><button class="save-button" type="button" id="finish-review">Finish Review</button></div>
+    <div class="review-panel-actions"><button type="button" id="panel-export">Download review JSON</button><button class="save-button" type="button" id="finish-review">Finish Review</button><button class="submit-button" type="button" id="submit-review">Submit for Revision</button></div>
   </dialog>
 
   <script src="contract.js" defer></script>
   <script src="selection-logic.js" defer></script>
+  <script src="review-api.js" defer></script>
   <script src="reader.js" defer></script>
 </body>
 </html>

@@ -21,3 +21,9 @@ Demo links use `reader.html?book=demo-book&chapter=1&version=1`. Local annotatio
 After Finish Review, MaxQuill constructs and validates an `OWNER_REVIEW_PACKAGE` containing only `schemaVersion`, `type`, `source`, chapter identity/version fields, `reviewedAt`, `reviewStatus`, and `annotations`. Each annotation contains only the contract-defined selection, category, comment, status, and canon-change fields. A download is blocked if its IDs, offsets, selected text, fields, or values fail validation.
 
 The exported package returns to the Book Architecture for import and any owner-authorized revision. MaxQuill itself never writes to the book repository.
+
+## Backend submission
+
+After completion, the same contract-valid `OWNER_REVIEW_PACKAGE` can be submitted through the authenticated Cloudflare Access browser session. MaxQuill stores the returned job ID against the exact book, chapter, and chapter version and restores queue status after a reload. The JSON download remains available as a fallback.
+
+`REVISION_READY` currently confirms that processing completed. New review package delivery will be connected with the local worker task; the reader does not improvise a result-package endpoint.
