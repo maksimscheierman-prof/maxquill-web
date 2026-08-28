@@ -5,12 +5,12 @@
   const PREFS_KEY = "maxquill:reader-preferences";
   const MODE_KEY = "maxquill:reader-mode";
   const defaults = { theme: "dark", fontSize: "medium", textWidth: "normal", lineHeight: "normal" };
-  let book, chapter, sourcePackage, progress, review, reviewJob = null, pendingSelection = null, editingId = null, scrollTimer, selectionTimer, pollTimer, actionEngaged = false, submitting = false;
+  let book, chapter, sourcePackage, reviewIdentity, progress, review, reviewJob = null, pendingSelection = null, editingId = null, scrollTimer, selectionTimer, pollTimer, actionEngaged = false, submitting = false;
 
   function readStorage(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (error) { console.warn(`Could not read ${key}.`, error); return fallback; } }
   function writeStorage(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { console.warn(`Could not save ${key}.`, error); } }
-  function reviewKey() { return `maxquill.review.${sourcePackage.bookId}.${sourcePackage.chapterId}.v${sourcePackage.chapterVersion}`; }
-  function newReview() { return { completed: false, reviewedAt: null, annotations: [] }; }
+  function reviewKey() { return MaxQuillReviewApi.reviewStorageKey(reviewIdentity); }
+  function newReview() { return { packageFingerprint: reviewIdentity.packageFingerprint, completed: false, reviewedAt: null, annotations: [] }; }
   function saveReview() { writeStorage(reviewKey(), review); updateReviewUi(); }
   function chapterUrl(item) { return `reader.html?book=${encodeURIComponent(book.id)}&chapter=${item.number}&version=${item.version}`; }
   function packageUrl(bookId, number, version) { return `content/books/${encodeURIComponent(bookId)}/review/chapter_${String(number).padStart(4, "0")}_v${version}.json`; }
@@ -104,7 +104,7 @@
     showMessage("#review-message", ""); if (!review.completed) { showMessage("#review-message", "Finish the review before exporting."); return; } const reviewPackage = buildOwnerReviewPackage(), validation = MaxQuillReviewContract.validateOwnerReviewPackage(reviewPackage, sourcePackage); if (!validation.valid) { showMessage("#review-message", `Export blocked: ${validation.errors.join(" ")}`); return; }
     const blob = new Blob([JSON.stringify(reviewPackage, null, 2)], { type: "application/json" }), url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = `${sourcePackage.bookId}-${sourcePackage.chapterId}-v${sourcePackage.chapterVersion}-owner-review.json`; document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function persistJob(job) { reviewJob = job; writeStorage(MaxQuillReviewApi.jobStorageKey(sourcePackage), job); updateJobUi(); }
+  function persistJob(job) { reviewJob = job; writeStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), job); updateJobUi(); }
   function updateJobUi() {
     if (!review || !sourcePackage) return; const submit = document.querySelector("#submit-review"), completion = document.querySelector("#review-job-status strong"), submitted = document.querySelector("#submission-state"), queue = document.querySelector("#queue-status");
     completion.textContent = review.completed ? "Review complete" : "Review in progress"; submitted.textContent = reviewJob ? "Submitted" : "Not submitted"; queue.hidden = !reviewJob; queue.className = "";
@@ -120,11 +120,11 @@
   }
   async function submitReview() {
     showMessage("#review-message", ""); if (!review.completed) { showMessage("#review-message", "Finish the review before submitting."); return; }
-    await MaxQuillSubmitFlow.submit({ api: MaxQuillReviewApi, buildPackage: buildOwnerReviewPackage, sourcePackage, persistJob, refreshJobStatus, startPolling, setSubmitting(value) { submitting = value; updateJobUi(); }, showError(message) { showMessage("#review-message", message); }, showSuccess: showSubmitToast, closePanel() { document.querySelector("#review-panel").close(); }, formatError: submissionError });
+    await MaxQuillSubmitFlow.submit({ api: MaxQuillReviewApi, buildPackage: buildOwnerReviewPackage, sourcePackage: reviewIdentity, persistJob, refreshJobStatus, startPolling, setSubmitting(value) { submitting = value; updateJobUi(); }, showError(message) { showMessage("#review-message", message); }, showSuccess: showSubmitToast, closePanel() { document.querySelector("#review-panel").close(); }, formatError: submissionError });
   }
   async function refreshJobStatus() {
     if (!reviewJob || ["REVISION_READY", "FAILED"].includes(reviewJob.status)) { stopPolling(); return; }
-    try { const job = await MaxQuillReviewApi.getReviewJob(reviewJob.jobId, sourcePackage); job.submittedAt = reviewJob.submittedAt; persistJob(job); if (job.status === "REVISION_READY") { showMessage("#review-message", "Revision ready. New review package delivery will be connected with the local worker task."); stopPolling(); } else if (job.status === "FAILED") { showMessage("#review-message", `Revision failed. ${job.error?.message || "Download the review JSON to retain the handoff."}`); stopPolling(); } }
+    try { const job = await MaxQuillReviewApi.getReviewJob(reviewJob.jobId, reviewIdentity); job.submittedAt = reviewJob.submittedAt; persistJob(job); if (job.status === "REVISION_READY") { showMessage("#review-message", "Revision ready. New review package delivery will be connected with the local worker task."); stopPolling(); } else if (job.status === "FAILED") { showMessage("#review-message", `Revision failed. ${job.error?.message || "Download the review JSON to retain the handoff."}`); stopPolling(); } }
     catch (error) { showMessage("#review-message", error.message || "Status check failed."); }
   }
   function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
@@ -144,7 +144,7 @@
       if (!window.MaxQuillReviewContract || !window.MaxQuillSelectionLogic || !window.MaxQuillReviewApi || !window.MaxQuillSubmitFlow) throw new Error("Review validation support is unavailable."); const bookResponse = await fetch(BOOK_URL); if (!bookResponse.ok) throw new Error(`Book data returned ${bookResponse.status}`); book = await bookResponse.json();
       const params = new URLSearchParams(location.search), requestedBook = params.get("book") || book.id, requestedNumber = Number.parseInt(params.get("chapter") || String(book.chapters[0].number), 10); chapter = book.chapters.find((item) => item.number === requestedNumber); if (requestedBook !== book.id || !chapter) throw new Error("The requested review candidate is not available."); const version = Number.parseInt(params.get("version") || String(chapter.version), 10); if (!Number.isInteger(version) || version < 1) throw new Error("The requested chapter version is invalid.");
       const response = await fetch(packageUrl(requestedBook, requestedNumber, version)); if (!response.ok) throw new Error(`Review candidate returned ${response.status}`); sourcePackage = await response.json(); const validation = MaxQuillReviewContract.validateReviewReadyPackage(sourcePackage); if (!validation.valid) throw new Error(`Contract validation failed: ${validation.errors.join(" ")}`); if (sourcePackage.bookId !== requestedBook || sourcePackage.chapterNumber !== requestedNumber || sourcePackage.chapterVersion !== version || sourcePackage.chapterId !== chapter.chapterId) throw new Error("Contract validation failed: package identity does not match the requested review candidate.");
-      progress = readStorage(PROGRESS_KEY, { bookId: book.id, readChapters: [], scrollPositions: {} }); review = readStorage(reviewKey(), newReview()); if (!review || typeof review !== "object" || !Array.isArray(review.annotations) || typeof review.completed !== "boolean") review = newReview(); if (review.completed && !review.reviewedAt) { review.reviewedAt = new Date().toISOString(); writeStorage(reviewKey(), review); } reviewJob = MaxQuillReviewApi.normalizeJob(readStorage(MaxQuillReviewApi.jobStorageKey(sourcePackage), null), sourcePackage); document.title = `Chapter ${sourcePackage.chapterNumber}: ${sourcePackage.title} | MaxQuill`; renderReader(); setupModes(); setupReview(); saveProgress(); setupProgress(); if (reviewJob) { await refreshJobStatus(); startPolling(); }
+      reviewIdentity = await MaxQuillReviewApi.packageIdentity(sourcePackage); progress = readStorage(PROGRESS_KEY, { bookId: book.id, readChapters: [], scrollPositions: {} }); review = readStorage(reviewKey(), newReview()); if (!review || typeof review !== "object" || review.packageFingerprint !== reviewIdentity.packageFingerprint || !Array.isArray(review.annotations) || typeof review.completed !== "boolean") review = newReview(); if (review.completed && !review.reviewedAt) { review.reviewedAt = new Date().toISOString(); writeStorage(reviewKey(), review); } reviewJob = MaxQuillReviewApi.normalizeJob(readStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), null), reviewIdentity); document.title = `Chapter ${sourcePackage.chapterNumber}: ${sourcePackage.title} | MaxQuill`; renderReader(); setupModes(); setupReview(); saveProgress(); setupProgress(); if (reviewJob) { await refreshJobStatus(); startPolling(); }
     } catch (error) { console.error("Could not open chapter.", error); document.querySelector("#reader-content").innerHTML = `<p class="error-message reader-loading">This review candidate could not be opened. ${String(error.message || error)} <a href="book.html">Return to the book</a>.</p>`; }
   }
   init();
