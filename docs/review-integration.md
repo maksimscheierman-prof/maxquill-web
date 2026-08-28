@@ -24,6 +24,6 @@ The exported package returns to the Book Architecture for import and any owner-a
 
 ## Backend submission
 
-After completion, the same contract-valid `OWNER_REVIEW_PACKAGE` can be submitted through the authenticated Cloudflare Access browser session. MaxQuill stores the returned job ID against the exact book, chapter, and chapter version and restores queue status after a reload. The JSON download remains available as a fallback.
+After completion, the same contract-valid `OWNER_REVIEW_PACKAGE` is submitted through the authenticated Cloudflare Access browser session. MaxQuill stores the returned job ID against the exact book, chapter, and chapter version and restores queue status after a reload. The package builder remains contract-exact, but manual JSON download is not part of the normal owner UI.
 
 `REVISION_READY` currently confirms that processing completed. New review package delivery will be connected with the local worker task; the reader does not improvise a result-package endpoint.

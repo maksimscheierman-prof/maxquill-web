@@ -7,7 +7,7 @@ MaxQuill Web is a static private-reader MVP for immersive serialized fiction.
 - Reading Mode with library, book details, responsive chapters, progress, and reader preferences
 - Review Mode with stable paragraph IDs, text annotations, editing, navigation, and review completion
 - Direct, validated Architecture `REVIEW_READY_PACKAGE` loading
-- Version-bound owner notes, backend submission/status, and validated `OWNER_REVIEW_PACKAGE` export fallback
+- Version-bound owner notes and validated `OWNER_REVIEW_PACKAGE` backend submission/status
 - Continue Reading and per-chapter scroll restoration
 - Cloudflare Pages Functions review queue with D1 migrations and private owner/worker authentication
 

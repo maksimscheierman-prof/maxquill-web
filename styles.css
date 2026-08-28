@@ -19,4 +19,6 @@
 .review-job-status .is-failed{color:#d99a91}
 .review-panel-actions .submit-button{min-height:3.15rem;border-color:var(--accent);background:var(--accent);color:var(--reader-bg);font-weight:700}
 .review-panel-actions button:disabled{cursor:not-allowed;opacity:.55}
+.submit-toast{position:fixed;z-index:10;right:max(1rem,env(safe-area-inset-right));bottom:calc(1rem + env(safe-area-inset-bottom));display:grid;gap:.1rem;min-width:min(20rem,calc(100% - 2rem));padding:.85rem 1rem;border:1px solid var(--accent);background:var(--raised);box-shadow:0 .7rem 2rem rgba(0,0,0,.4)}
+.submit-toast[hidden]{display:none}.submit-toast strong{color:var(--reader-text)}.submit-toast span{color:var(--reader-muted);font-size:.8rem}
 @media(max-width:30rem){.review-panel-actions{display:grid;grid-template-columns:1fr;margin-inline:-1.25rem;padding:1rem 1.25rem calc(1rem + env(safe-area-inset-bottom))}.review-panel-actions .submit-button{grid-row:1}.review-panel-actions button{width:100%}}

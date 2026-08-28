@@ -31,7 +31,6 @@
     <div><span id="review-chapter-status">Review Candidate</span><strong id="open-note-count">Open notes: 0</strong></div>
     <div>
       <button type="button" id="open-review-panel">Review notes</button>
-      <button type="button" id="export-review">Export Review</button>
     </div>
   </div>
 
@@ -70,12 +69,15 @@
     </section>
     <p class="form-message" id="review-message" role="alert" hidden></p>
     <ol class="review-note-list" id="review-note-list"></ol>
-    <div class="review-panel-actions"><button type="button" id="panel-export">Download review JSON</button><button class="save-button" type="button" id="finish-review">Finish Review</button><button class="submit-button" type="button" id="submit-review">Submit for Revision</button></div>
+    <div class="review-panel-actions"><button class="save-button" type="button" id="finish-review">Finish Review</button><button class="submit-button" type="button" id="submit-review">Submit for Revision</button></div>
   </dialog>
+
+  <div class="submit-toast" id="submit-toast" role="status" aria-live="polite" hidden><strong id="submit-toast-title"></strong><span id="submit-toast-detail"></span></div>
 
   <script src="contract.js" defer></script>
   <script src="selection-logic.js" defer></script>
   <script src="review-api.js" defer></script>
+  <script src="review-submit-flow.js" defer></script>
   <script src="reader.js" defer></script>
 </body>
 </html>

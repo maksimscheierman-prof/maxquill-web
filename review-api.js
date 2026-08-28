@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.MaxQuillReviewApi = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
   const JOB_STATUSES = new Set(["QUEUED", "CLAIMED", "PROCESSING", "REVISION_READY", "FAILED"]);
   const STATUS_LABELS = { QUEUED: "Queued", CLAIMED: "Processing", PROCESSING: "Processing", REVISION_READY: "Revision ready", FAILED: "Failed" };
