@@ -1,6 +1,6 @@
 # MaxQuill Web
 
-MaxQuill Web is a static private-reader MVP for immersive serialized fiction.
+MaxQuill Web is a static private-reader MVP for immersive serialized fiction. It implements reader and owner-review application behavior. Book Architecture owns reusable book lifecycle and contracts; a concrete book repository owns the story. See [AGENTS.md](AGENTS.md).
 
 ## Current MVP
 
