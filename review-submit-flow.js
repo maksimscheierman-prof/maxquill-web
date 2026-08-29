@@ -42,5 +42,19 @@
       });
     };
   }
-  return { submit, createSubmitHandler };
+  function reviewUiState(review, job, submitting, statusLabels) {
+    const label = job ? statusLabels[job.status] : "";
+    return {
+      completion: review.completed ? "Review complete" : "Review in progress",
+      submittedHidden: !job,
+      submitted: job ? "Submitted" : "",
+      queueHidden: !job,
+      queue: label,
+      readerStatus: job ? `Submitted · ${label}` : null,
+      submitHidden: Boolean(job),
+      submitDisabled: !review.completed || submitting,
+      submitText: submitting ? "Submitting..." : "Submit for Revision"
+    };
+  }
+  return { submit, createSubmitHandler, reviewUiState };
 });

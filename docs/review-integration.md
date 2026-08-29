@@ -14,7 +14,7 @@ MaxQuill is an external owner-review client. The book repository remains the can
 
 The reader loads Architecture schema-version-1 packages directly from `content/books/<book-id>/review/chapter_####_v#.json`. It validates the exact top-level and paragraph fields before rendering. Invalid packages are rejected without repair. Supplied paragraph IDs and order remain unchanged.
 
-Demo links use `reader.html?book=demo-book&chapter=1&version=1`. Local annotations use `maxquill.review.<bookId>.<chapterId>.v<chapterVersion>`, so notes never transfer automatically between versions.
+Demo links use `reader.html?book=demo-book&chapter=1&version=1`. Local annotations and jobs are keyed by book, chapter, version, and a deterministic SHA-256 fingerprint of the exact review-ready draft, so state never transfers automatically between drafts or versions.
 
 ## Owner review export
 
@@ -24,6 +24,6 @@ The exported package returns to the Book Architecture for import and any owner-a
 
 ## Backend submission
 
-After completion, the same contract-valid `OWNER_REVIEW_PACKAGE` is submitted through the authenticated Cloudflare Access browser session. MaxQuill stores the returned job ID against the exact book, chapter, and chapter version and restores queue status after a reload. The package builder remains contract-exact, but manual JSON download is not part of the normal owner UI.
+After completion, the same contract-valid `OWNER_REVIEW_PACKAGE` is submitted through the authenticated Cloudflare Access browser session. The draft fingerprint travels separately in `X-MaxQuill-Package-Fingerprint`, leaving the owner-review contract exact. MaxQuill stores the returned job ID against that exact draft identity and restores queue status after a reload.
 
 `REVISION_READY` currently confirms that processing completed. New review package delivery will be connected with the local worker task; the reader does not improvise a result-package endpoint.

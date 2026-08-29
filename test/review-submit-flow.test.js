@@ -41,3 +41,13 @@ test("unexpected async submit error is visible and re-enables retry", async () =
   handler({ preventDefault() {} }); await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(states, [true, false]); assert.deepEqual(errors, ["Could not submit review."]);
 });
+
+test("finish review shows a clean submit CTA without a not-submitted status", () => {
+  const state = flow.reviewUiState({ completed: true }, null, false, reviewApi.STATUS_LABELS);
+  assert.equal(state.completion, "Review complete"); assert.equal(state.submittedHidden, true); assert.equal(state.submitted, ""); assert.equal(state.queueHidden, true); assert.equal(state.submitHidden, false); assert.equal(state.submitDisabled, false); assert.equal(state.submitText, "Submit for Revision");
+});
+
+test("queued review shows the concise submitted reader status", () => {
+  const state = flow.reviewUiState({ completed: true }, { status: "QUEUED" }, false, reviewApi.STATUS_LABELS);
+  assert.equal(state.submitted, "Submitted"); assert.equal(state.queue, "Queued"); assert.equal(state.readerStatus, "Submitted · Queued"); assert.equal(state.submitHidden, true);
+});

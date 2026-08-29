@@ -4,20 +4,21 @@ import { fingerprint, validateOwnerReview, validateReviewReady } from "./contrac
 const publicJob = (row) => ({ jobId: row.id, status: row.status, bookId: row.book_id, chapterId: row.chapter_id, chapterVersion: row.chapter_version, createdAt: row.created_at, updatedAt: row.updated_at, ...(row.status === "FAILED" ? { error: { code: row.error_code || "REVISION_FAILED", message: row.error_message || "Revision failed." } } : {}) });
 const workerJob = (row) => ({ ...publicJob(row), chapterNumber: row.chapter_number, reviewPackage: JSON.parse(row.review_package_json) });
 function workerId(value) { if (!value || typeof value !== "string" || !/^[A-Za-z0-9._-]{1,100}$/.test(value)) throw new ApiError(400, "INVALID_WORKER_ID", "A valid workerId is required."); return value; }
+function packageFingerprint(value) { if (typeof value !== "string" || !/^[a-f0-9]{64}$/i.test(value)) throw new ApiError(400, "INVALID_PACKAGE_FINGERPRINT", "A valid package fingerprint is required."); return value.toLowerCase(); }
 
 export class ReviewQueueService {
   constructor(store, options = {}) { this.store = store; this.now = options.now || (() => new Date().toISOString()); this.uuid = options.uuid || (() => crypto.randomUUID()); }
-  async submit(pkg) {
+  async submit(pkg, sourceFingerprint) {
     if (!validateOwnerReview(pkg).valid) throw new ApiError(400, "INVALID_REVIEW_PACKAGE", "Review package validation failed.");
-    const hash = await fingerprint(pkg), existing = await this.store.byVersion(pkg.bookId, pkg.chapterId, pkg.chapterVersion);
-    if (existing) { if (existing.package_fingerprint === hash) return { job: publicJob(existing), created: false }; throw new ApiError(409, "REVIEW_VERSION_CONFLICT", "A different review already exists for this chapter version."); }
+    const packageHash = packageFingerprint(sourceFingerprint), reviewHash = await fingerprint(pkg), existing = await this.store.byPackage(pkg.bookId, pkg.chapterId, pkg.chapterVersion, packageHash);
+    if (existing) { if (existing.review_fingerprint === reviewHash) return { job: publicJob(existing), created: false }; throw new ApiError(409, "REVIEW_PACKAGE_CONFLICT", "A different review for this exact draft has already been submitted."); }
     try {
-      const row = await this.store.create({ id: this.uuid(), bookId: pkg.bookId, chapterId: pkg.chapterId, chapterNumber: pkg.chapterNumber, chapterVersion: pkg.chapterVersion, fingerprint: hash, reviewJson: JSON.stringify(pkg), now: this.now() });
+      const row = await this.store.create({ id: this.uuid(), bookId: pkg.bookId, chapterId: pkg.chapterId, chapterNumber: pkg.chapterNumber, chapterVersion: pkg.chapterVersion, packageFingerprint: packageHash, reviewFingerprint: reviewHash, reviewJson: JSON.stringify(pkg), now: this.now() });
       return { job: publicJob(row), created: true };
     } catch (error) {
-      const raced = await this.store.byVersion(pkg.bookId, pkg.chapterId, pkg.chapterVersion);
-      if (raced?.package_fingerprint === hash) return { job: publicJob(raced), created: false };
-      if (raced) throw new ApiError(409, "REVIEW_VERSION_CONFLICT", "A different review already exists for this chapter version.");
+      const raced = await this.store.byPackage(pkg.bookId, pkg.chapterId, pkg.chapterVersion, packageHash);
+      if (raced?.review_fingerprint === reviewHash) return { job: publicJob(raced), created: false };
+      if (raced) throw new ApiError(409, "REVIEW_PACKAGE_CONFLICT", "A different review for this exact draft has already been submitted.");
       throw error;
     }
   }

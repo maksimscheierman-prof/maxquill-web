@@ -8,7 +8,7 @@ The backend transports, validates, queues, and reports status. It never changes 
 
 ## Cloudflare layout
 
-The reader remains static. Cloudflare Pages Functions handle only `/api/*`, with D1 available as `env.DB`. `migrations/0001_initial.sql` creates `review_jobs`, its state constraint, version uniqueness, and queue index. Small owner and result packages are stored as JSON text.
+The reader remains static. Cloudflare Pages Functions handle only `/api/*`, with D1 available as `env.DB`. The migrations create `review_jobs`, its state constraint, draft-scoped uniqueness, and queue index. Small owner and result packages are stored as JSON text. `POST /api/reviews` requires the exact draft fingerprint in `X-MaxQuill-Package-Fingerprint`.
 
 The committed `wrangler.example.jsonc` is deliberately inactive. First download/compare the live Pages project configuration, then copy the example to ignored `wrangler.jsonc` and insert the real D1 ID. This prevents a placeholder ID from breaking the existing Git deployment.
 
@@ -22,7 +22,7 @@ The committed `wrangler.example.jsonc` is deliberately inactive. First download/
 - `POST /api/jobs/:id/result` — claiming worker; validates a newer `REVIEW_READY_PACKAGE` and changes `PROCESSING` to `REVISION_READY`.
 - `POST /api/jobs/:id/fail` — claiming worker; changes `CLAIMED` or `PROCESSING` to `FAILED` with safe error data.
 
-Identical submissions return the existing job. A different package for the same `bookId`, `chapterId`, and `chapterVersion` returns `409` and never overwrites data. The SHA-256 fingerprint covers canonicalized package JSON.
+The backend stores the REVIEW_READY draft fingerprint separately from its own SHA-256 fingerprint of the canonical OWNER_REVIEW JSON. An identical review for the same draft returns the existing job. A different review for that exact draft returns `409`. A different draft fingerprint can create a separate job even when book, chapter, and version match. Existing pre-migration jobs remain preserved under isolated legacy identities.
 
 ## Authentication
 
@@ -51,4 +51,4 @@ For local authenticated API testing, use Wrangler local variables with test-only
 4. Configure `MAXQUILL_WORKER_TOKEN` as an encrypted Pages secret.
 5. Create Access owner and future worker service-token policies, then redeploy.
 
-The JSON download fallback remains the only reader UI flow in V1. Submit-for-Revision UI integration is a separate task.
+The reader submits completed reviews directly and retains JSON export as a fallback.

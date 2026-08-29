@@ -32,7 +32,7 @@
   async function responseJson(response) { try { return await response.json(); } catch (_) { return null; } }
   function responseError(response, data, operation) {
     if (response.status === 401 || response.status === 403) return new ReviewApiError("auth", "Your owner session is unavailable or has expired. Sign in through Cloudflare Access and try again.", response.status);
-    if (operation === "submit" && response.status === 409) return new ReviewApiError("conflict", "A different review for this chapter version has already been submitted.", response.status);
+    if (operation === "submit" && response.status === 409) return new ReviewApiError("conflict", "A different review for this exact draft has already been submitted.", response.status);
     const safe = typeof data?.error?.message === "string" ? data.error.message : "The backend could not complete the request.";
     return new ReviewApiError(operation === "submit" ? "rejected" : "status", safe, response.status);
   }
@@ -40,10 +40,10 @@
     const validation = contract?.validateOwnerReviewPackage?.(reviewPackage, sourcePackage);
     if (!validation?.valid) throw new ReviewApiError("validation", `Review cannot be submitted: ${(validation?.errors || ["Contract validation is unavailable."]).join(" ")}`);
     let response;
-    try { response = await fetchImpl("/api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reviewPackage) }); }
+    const identity = await packageIdentity(sourcePackage);
+    try { response = await fetchImpl("/api/reviews", { method: "POST", headers: { "Content-Type": "application/json", "X-MaxQuill-Package-Fingerprint": identity.packageFingerprint }, body: JSON.stringify(reviewPackage) }); }
     catch (_) { throw new ReviewApiError("submit-network", "Submit failed. Check your connection and try again."); }
     const data = await responseJson(response); if (!response.ok) throw responseError(response, data, "submit");
-    const identity = await packageIdentity(sourcePackage);
     const job = normalizeJob({ ...data, packageFingerprint: identity.packageFingerprint, submittedAt: new Date().toISOString() }, identity);
     if (!job) throw new ReviewApiError("rejected", "Backend rejected review: the response did not contain a valid job.", response.status);
     return job;
