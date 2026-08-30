@@ -31,6 +31,15 @@ export class ReviewQueueService {
     if (!row) throw new ApiError(404, "JOB_NOT_FOUND", "Review job was not found.");
     const pkg = input?.reviewReadyPackage;
     if (!validateReviewReady(pkg).valid || pkg.bookId !== row.book_id || pkg.chapterId !== row.chapter_id || pkg.chapterNumber !== row.chapter_number || pkg.chapterVersion <= row.chapter_version) throw new ApiError(400, "INVALID_RESULT_PACKAGE", "Result package validation failed.");
+    if (row.status === "REVISION_READY") {
+      const stored = row.result_package_json ? JSON.parse(row.result_package_json) : null;
+      if (stored && await fingerprint(stored) === await fingerprint(pkg)) return publicJob(row);
+      throw new ApiError(409, "RESULT_CONFLICT", "A different result for this job has already been accepted.");
+    }
+    if (row.status === "FAILED") {
+      if (!new Set(["HTTP_400", "INVALID_INPUT", "INVALID_RESULT_PACKAGE"]).has(row.error_code)) throw new ApiError(409, "INVALID_JOB_STATE", "Job state transition is not allowed.");
+      return this.change(id, "FAILED", "REVISION_READY", idValue, { resultJson: JSON.stringify(pkg), skipWorkerMatch: true });
+    }
     return this.change(id, "PROCESSING", "REVISION_READY", idValue, { resultJson: JSON.stringify(pkg) });
   }
   async fail(id, input) {

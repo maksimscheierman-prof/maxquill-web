@@ -20,7 +20,7 @@ class MemoryStore {
   async byId(id) { return this.rows.find((row) => row.id === id) || null; }
   async create(job) { const row = { id: job.id, book_id: job.bookId, chapter_id: job.chapterId, chapter_number: job.chapterNumber, chapter_version: job.chapterVersion, status: "QUEUED", package_fingerprint: job.packageFingerprint, review_fingerprint: job.reviewFingerprint, review_package_json: job.reviewJson, created_at: job.now, updated_at: job.now, worker_id: null, error_code: null, error_message: null }; this.rows.push(row); return row; }
   async next() { return this.rows.find((row) => row.status === "QUEUED") || null; }
-  async transition(id, from, to, workerId, now, changes = {}) { const row = await this.byId(id); if (!row || row.status !== from || (from !== "QUEUED" && row.worker_id !== workerId)) return null; row.status = to; row.updated_at = now; if (to === "CLAIMED") row.worker_id = workerId; if (to === "REVISION_READY") row.result_package_json = changes.resultJson; if (to === "FAILED") { row.error_code = changes.errorCode; row.error_message = changes.errorMessage; } return row; }
+  async transition(id, from, to, workerId, now, changes = {}) { const row = await this.byId(id); if (!row || row.status !== from || (from !== "QUEUED" && !changes.skipWorkerMatch && row.worker_id !== workerId)) return null; row.status = to; row.updated_at = now; if (to === "CLAIMED") row.worker_id = workerId; if (to === "REVISION_READY") { row.result_package_json = changes.resultJson; row.error_code = null; row.error_message = null; } if (to === "FAILED") { row.error_code = changes.errorCode; row.error_message = changes.errorMessage; } return row; }
 }
 function queue() { let id = 0; return new ReviewQueueService(new MemoryStore(), { now: () => "2026-08-28T12:00:00.000Z", uuid: () => `job-${++id}` }); }
 async function expectApi(promise, status, code) { await assert.rejects(promise, (error) => error instanceof ApiError && error.status === status && error.code === code); }
@@ -33,6 +33,26 @@ for (const [name, mutate] of [["unknown top-level field", (pkg) => { pkg.secret 
 test("oversized bodies are rejected before parsing", async () => { const request = new Request("https://example.test/api/reviews", { method: "POST", headers: { "content-type": "application/json", "content-length": String(MAX_BODY_BYTES + 1) }, body: "{}" }); await expectApi(readJson(request), 413, "PAYLOAD_TOO_LARGE"); });
 test("job lifecycle enforces atomic claim and valid transitions", async () => { const service = queue(), submitted = await service.submit(review(), packageA), id = submitted.job.jobId; assert.equal((await service.claim(id, { workerId: "worker-1" })).status, "CLAIMED"); await expectApi(service.claim(id, { workerId: "worker-2" }), 409, "INVALID_JOB_STATE"); assert.equal((await service.processing(id, { workerId: "worker-1" })).status, "PROCESSING"); assert.equal((await service.result(id, { workerId: "worker-1", reviewReadyPackage: resultPackage() })).status, "REVISION_READY"); await expectApi(service.processing(id, { workerId: "worker-1" }), 409, "INVALID_JOB_STATE"); });
 test("claimed or processing jobs can fail, queued jobs cannot skip states", async () => { const service = queue(), id = (await service.submit(review(), packageA)).job.jobId; await expectApi(service.processing(id, { workerId: "worker-1" }), 409, "INVALID_JOB_STATE"); await service.claim(id, { workerId: "worker-1" }); assert.equal((await service.fail(id, { workerId: "worker-1", errorCode: "REVISION_ERROR", errorMessage: "Safe failure." })).status, "FAILED"); await expectApi(service.processing(id, { workerId: "worker-1" }), 409, "INVALID_JOB_STATE"); });
+test("HTTP_400 failure can retry a valid newer result without a second revision lifecycle", async () => {
+  const service = queue(), id = (await service.submit(review(), packageA)).job.jobId;
+  await service.claim(id, { workerId: "worker-1" });
+  await service.processing(id, { workerId: "worker-1" });
+  assert.equal((await service.fail(id, { workerId: "worker-1", errorCode: "HTTP_400", errorMessage: "Result package validation failed." })).status, "FAILED");
+  const recovered = await service.result(id, { workerId: "worker-recovery", reviewReadyPackage: resultPackage() });
+  assert.equal(recovered.status, "REVISION_READY");
+  assert.equal(recovered.error, undefined);
+  const again = await service.result(id, { workerId: "worker-recovery", reviewReadyPackage: resultPackage() });
+  assert.equal(again.status, "REVISION_READY");
+  const different = { ...resultPackage(), title: "Different title" };
+  await expectApi(service.result(id, { workerId: "worker-recovery", reviewReadyPackage: different }), 409, "RESULT_CONFLICT");
+});
+test("engine FAILED jobs cannot be recovered through result upload", async () => {
+  const service = queue(), id = (await service.submit(review(), packageA)).job.jobId;
+  await service.claim(id, { workerId: "worker-1" });
+  await service.processing(id, { workerId: "worker-1" });
+  await service.fail(id, { workerId: "worker-1", errorCode: "REVISION_ERROR", errorMessage: "Safe failure." });
+  await expectApi(service.result(id, { workerId: "worker-1", reviewReadyPackage: resultPackage() }), 409, "INVALID_JOB_STATE");
+});
 test("worker identity cannot take over another worker's claim", async () => { const service = queue(), id = (await service.submit(review(), packageA)).job.jobId; await service.claim(id, { workerId: "worker-1" }); await expectApi(service.processing(id, { workerId: "worker-2" }), 409, "INVALID_JOB_STATE"); });
 test("owner auth rejects missing assertion and accepts verified Access identity", async () => { const request = new Request("https://example.test/api/reviews"); await expectApi(requireOwner(request, {}, async () => false), 401, "UNAUTHORIZED"); const asserted = new Request(request, { headers: { "cf-access-jwt-assertion": "signed" } }); await requireOwner(asserted, {}, async (token) => token === "signed"); });
 test("worker auth rejects absent and wrong tokens", async () => { const url = "https://example.test/api/jobs/next"; await expectApi(requireWorker(new Request(url), { MAXQUILL_WORKER_TOKEN: "correct" }), 401, "UNAUTHORIZED"); await expectApi(requireWorker(new Request(url, { headers: { authorization: "Bearer wrong" } }), { MAXQUILL_WORKER_TOKEN: "correct" }), 403, "FORBIDDEN"); await requireWorker(new Request(url, { headers: { authorization: "Bearer correct" } }), { MAXQUILL_WORKER_TOKEN: "correct" }); });

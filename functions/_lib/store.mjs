@@ -11,11 +11,14 @@ export class D1JobStore {
     const timestampColumn = { CLAIMED: "claimed_at", PROCESSING: "processing_started_at", REVISION_READY: "completed_at", FAILED: "failed_at" }[to];
     const assignments = ["status = ?", "updated_at = ?", `${timestampColumn} = ?`], values = [to, now, now];
     if (to === "CLAIMED") { assignments.push("worker_id = ?", "attempt_count = attempt_count + 1"); values.push(workerId); }
-    if (to === "REVISION_READY") { assignments.push("result_package_json = ?"); values.push(changes.resultJson); }
+    if (to === "REVISION_READY") {
+      assignments.push("result_package_json = ?", "error_code = NULL", "error_message = NULL");
+      values.push(changes.resultJson);
+    }
     if (to === "FAILED") { assignments.push("error_code = ?", "error_message = ?"); values.push(changes.errorCode, changes.errorMessage); }
     values.push(id, from);
     let where = "id = ? AND status = ?";
-    if (from !== "QUEUED") { where += " AND worker_id = ?"; values.push(workerId); }
+    if (from !== "QUEUED" && !changes.skipWorkerMatch) { where += " AND worker_id = ?"; values.push(workerId); }
     const result = await this.db.prepare(`UPDATE review_jobs SET ${assignments.join(", ")} WHERE ${where}`).bind(...values).run();
     return Number(result.meta?.changes || 0) === 1 ? this.byId(id) : null;
   }

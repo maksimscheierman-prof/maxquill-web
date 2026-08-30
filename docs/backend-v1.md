@@ -19,7 +19,7 @@ The committed `wrangler.example.jsonc` is deliberately inactive. First download/
 - `GET /api/jobs/next` — worker; returns the oldest queued job or `{"job":null}`.
 - `POST /api/jobs/:id/claim` — worker; atomically changes `QUEUED` to `CLAIMED`.
 - `POST /api/jobs/:id/processing` — claiming worker; changes `CLAIMED` to `PROCESSING`.
-- `POST /api/jobs/:id/result` — claiming worker; validates a newer `REVIEW_READY_PACKAGE` and changes `PROCESSING` to `REVISION_READY`.
+- `POST /api/jobs/:id/result` — worker; validates a newer `REVIEW_READY_PACKAGE`. From `PROCESSING` this stores the package and changes the job to `REVISION_READY`. From `FAILED` this is allowed only when `error_code` is a result-delivery validation failure (`HTTP_400`, `INVALID_INPUT`, or `INVALID_RESULT_PACKAGE`); it does not start a second revision. An identical package against `REVISION_READY` is idempotent; a different package is rejected.
 - `POST /api/jobs/:id/fail` — claiming worker; changes `CLAIMED` or `PROCESSING` to `FAILED` with safe error data.
 
 The backend stores the REVIEW_READY draft fingerprint separately from its own SHA-256 fingerprint of the canonical OWNER_REVIEW JSON. An identical review for the same draft returns the existing job. A different review for that exact draft returns `409`. A different draft fingerprint can create a separate job even when book, chapter, and version match. Existing pre-migration jobs remain preserved under isolated legacy identities.
