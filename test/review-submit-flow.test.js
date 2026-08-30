@@ -51,3 +51,12 @@ test("queued review shows the concise submitted reader status", () => {
   const state = flow.reviewUiState({ completed: true }, { status: "QUEUED" }, false, reviewApi.STATUS_LABELS);
   assert.equal(state.submitted, "Submitted"); assert.equal(state.queue, "Queued"); assert.equal(state.readerStatus, "Submitted · Queued"); assert.equal(state.submitHidden, true);
 });
+
+test("reader exposes a touch-safe revised-version CTA only for result delivery", () => {
+  const html = fs.readFileSync(require.resolve("../reader.html"), "utf8"), script = fs.readFileSync(require.resolve("../reader.js"), "utf8"), css = fs.readFileSync(require.resolve("../styles.css"), "utf8");
+  assert.match(html, /id="open-revised-version" hidden>Open revised version/);
+  assert.match(script, /openRevision\.hidden = reviewJob\?\.status !== "REVISION_READY"/);
+  assert.match(script, /getReviewResult\(reviewJob\.jobId, reviewIdentity\)/);
+  assert.match(script, /version=\$\{result\.chapterVersion\}&resultJob=/);
+  assert.match(css, /\.review-bar \.open-revision-button\{min-height:3\.15rem/);
+});

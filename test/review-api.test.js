@@ -27,3 +27,16 @@ test("same package with QUEUED job survives reload and polling updates it", asyn
 });
 test("FAILED job exposes only the backend safe message", async () => { const job = await api.getReviewJob("job-1", source, async () => response(200, { jobId: "job-1", status: "FAILED", bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 1, error: { code: "REVISION_ERROR", message: "Safe failure." } })); assert.equal(job.status, "FAILED"); assert.equal(job.error.message, "Safe failure."); });
 test("status network failure is distinct from submit failure", async () => { await assert.rejects(api.getReviewJob("job-1", source, async () => { throw new Error("private detail"); }), (error) => error.kind === "status-network" && error.message.startsWith("Status check failed")); });
+test("REVISION_READY result loads the exact package and computes a new isolated identity", async () => {
+  const revised = { ...source, chapterVersion: 2, title: "Revised", content: [{ id: "p001", text: "Revised paragraph." }] }, previous = await api.packageIdentity(source);
+  let request; const loaded = await api.getReviewResult("job-1", previous, async (url, options) => { request = { url, options }; return response(200, revised); }, contract), loadedIdentity = await api.packageIdentity(loaded);
+  assert.deepEqual(request, { url: "/api/jobs/job-1/result", options: undefined });
+  assert.deepEqual(loaded, revised); assert.equal(Object.hasOwn(loaded, "packageFingerprint"), false); assert.match(loadedIdentity.packageFingerprint, /^[a-f0-9]{64}$/); assert.notEqual(loadedIdentity.packageFingerprint, previous.packageFingerprint);
+  assert.notEqual(api.reviewStorageKey(loadedIdentity), api.reviewStorageKey(previous)); assert.equal(api.resultStorageKey("job-1"), "maxquill.result-package.job-1");
+});
+test("invalid and wrong-identity result packages are refused", async () => {
+  const previous = await api.packageIdentity(source), invalid = { ...source, chapterVersion: 2, extra: true }, wrong = { ...source, bookId: "wrong-book", chapterVersion: 2 };
+  await assert.rejects(api.getReviewResult("job-1", previous, async () => response(200, invalid), contract), (error) => error.kind === "validation");
+  await assert.rejects(api.getReviewResult("job-1", previous, async () => response(200, wrong), contract), (error) => error.kind === "validation");
+});
+for (const status of [401, 409]) test(`result endpoint ${status} is surfaced safely`, async () => { await assert.rejects(api.getReviewResult("job-1", source, async () => response(status, { error: { message: "Safe result error." } }), contract), (error) => (status === 401 ? error.kind === "auth" : error.kind === "status")); });

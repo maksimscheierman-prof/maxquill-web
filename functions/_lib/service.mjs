@@ -23,6 +23,15 @@ export class ReviewQueueService {
     }
   }
   async status(id) { const row = await this.store.byId(id); if (!row) throw new ApiError(404, "JOB_NOT_FOUND", "Review job was not found."); return publicJob(row); }
+  async resultPackage(id) {
+    const row = await this.store.byId(id);
+    if (!row) throw new ApiError(404, "JOB_NOT_FOUND", "Review job was not found.");
+    if (row.status !== "REVISION_READY") throw new ApiError(409, "RESULT_NOT_READY", "The revised review package is not ready.");
+    let pkg;
+    try { pkg = JSON.parse(row.result_package_json); } catch { throw new ApiError(500, "INVALID_STORED_RESULT", "The stored result package is invalid."); }
+    if (!validateReviewReady(pkg).valid || pkg.bookId !== row.book_id || pkg.chapterId !== row.chapter_id || pkg.chapterNumber !== row.chapter_number || pkg.chapterVersion <= row.chapter_version) throw new ApiError(500, "INVALID_STORED_RESULT", "The stored result package is invalid.");
+    return pkg;
+  }
   async next() { const row = await this.store.next(); return row ? workerJob(row) : null; }
   async claim(id, input) { return this.change(id, "QUEUED", "CLAIMED", workerId(input?.workerId)); }
   async processing(id, input) { return this.change(id, "CLAIMED", "PROCESSING", workerId(input?.workerId)); }

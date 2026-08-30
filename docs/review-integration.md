@@ -26,4 +26,4 @@ The exported package returns to the Book Architecture for import and any owner-a
 
 After completion, the same contract-valid `OWNER_REVIEW_PACKAGE` is submitted through the authenticated Cloudflare Access browser session. The draft fingerprint travels separately in `X-MaxQuill-Package-Fingerprint`, leaving the owner-review contract exact. MaxQuill stores the returned job ID against that exact draft identity and restores queue status after a reload.
 
-`REVISION_READY` currently confirms that processing completed. New review package delivery will be connected with the local worker task; the reader does not improvise a result-package endpoint.
+At `REVISION_READY`, the reader shows an explicit **Open revised version** action. It loads the exact stored result contract from `GET /api/jobs/:id/result`, validates its identity, computes the new package fingerprint, and opens a URL containing the new version and result-job reference. Reloads use that authenticated reference with a validated local cache fallback; review and job state remain isolated by version and fingerprint.

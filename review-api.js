@@ -57,5 +57,16 @@
     const job = normalizeJob({ ...data, packageFingerprint: resolvedIdentity.packageFingerprint }, resolvedIdentity); if (!job || job.jobId !== jobId) throw new ReviewApiError("status", "Status check failed: the backend returned an invalid job.", response.status);
     return job;
   }
-  return { ReviewApiError, STATUS_LABELS, canonicalReviewPackageIdentity, reviewPackageFingerprint, packageIdentity, reviewStorageKey, jobStorageKey, normalizeJob, submitOwnerReview, getReviewJob };
+  async function getReviewResult(jobId, sourceIdentity, fetchImpl = root.fetch, contract = root.MaxQuillReviewContract) {
+    let response;
+    try { response = await fetchImpl(`/api/jobs/${encodeURIComponent(jobId)}/result`); }
+    catch (_) { throw new ReviewApiError("result-network", "Revised version could not be loaded. Check the connection and try again."); }
+    const data = await responseJson(response); if (!response.ok) throw responseError(response, data, "result");
+    const validation = contract?.validateReviewReadyPackage?.(data);
+    if (!validation?.valid) throw new ReviewApiError("validation", `Revised package validation failed: ${(validation?.errors || ["Contract validation is unavailable."]).join(" ")}`);
+    if (data.bookId !== sourceIdentity.bookId || data.chapterId !== sourceIdentity.chapterId || data.chapterNumber !== sourceIdentity.chapterNumber || data.chapterVersion <= sourceIdentity.chapterVersion) throw new ReviewApiError("validation", "Revised package identity does not match this review job.");
+    return data;
+  }
+  function resultStorageKey(jobId) { return `maxquill.result-package.${jobId}`; }
+  return { ReviewApiError, STATUS_LABELS, canonicalReviewPackageIdentity, reviewPackageFingerprint, packageIdentity, reviewStorageKey, jobStorageKey, resultStorageKey, normalizeJob, submitOwnerReview, getReviewJob, getReviewResult };
 });
