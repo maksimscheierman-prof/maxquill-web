@@ -9,6 +9,7 @@ MaxQuill Web is a static private-reader MVP for immersive serialized fiction. It
 - Direct, validated Architecture `REVIEW_READY_PACKAGE` loading
 - Version-bound owner notes and validated `OWNER_REVIEW_PACKAGE` backend submission/status
 - Continue Reading and per-chapter scroll restoration
+- Optional Visual Companion manifest loader (`getCompanionState`) with progress-checkpoint resolution and no map/gallery UI yet
 - Cloudflare Pages Functions review queue with D1 migrations and private owner/worker authentication
 
 ## Local preview
@@ -27,4 +28,4 @@ Deploy the repository root with no framework preset or build command. The reader
 
 MaxQuill is an external owner-review client; the book repository remains the canonical source of truth. See `docs/review-integration.md` for the contract-exact handoff.
 
-The optional [Visual Companion product direction](docs/visual-companion.md) plans progress-aware chapter maps and a reader-invoked Character Gallery. It is not implemented in the current MVP and does not alter existing review packages or books without companion metadata. See also the [product backlog](docs/product-roadmap.md).
+The optional [Visual Companion](docs/visual-companion.md) can load a reader-safe sidecar at `content/books/<book-id>/companion.json`. Missing, disabled, or invalid companion data leaves ordinary reading unchanged. Map overlay and Character Gallery UI remain future work; see the [product backlog](docs/product-roadmap.md).

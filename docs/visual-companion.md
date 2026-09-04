@@ -1,6 +1,6 @@
 # Visual Companion Product Direction
 
-Status: **PLANNED / NOT IMPLEMENTED**. This document defines a future optional MaxQuill reader feature; it does not add UI or change current package contracts.
+Status: **SKELETON / CONTRACT LOADER**. MaxQuill can detect, validate, and resolve a reader-safe companion manifest against saved progress. Map overlay and Character Gallery UI are not implemented.
 
 ## Product boundary
 
@@ -18,7 +18,9 @@ Visual Companion must not be added to the Architecture-owned Review Ready or Own
 
 ## Reader data requirements
 
-MaxQuill expects an already-filtered projection for a book/chapter/progress checkpoint, not raw production records. A future versioned manifest should provide only applicable fields:
+MaxQuill expects an already-filtered projection for a book/chapter/progress checkpoint, not raw production records. The versioned sidecar is `content/books/<book-id>/companion.json` (`schemaVersion` 1, `type: visual_companion_manifest`). It is optional: a missing file, `enabled: false`, or an unsupported schema version leaves ordinary reading unchanged.
+
+A future versioned manifest should provide only applicable fields:
 
 - stable book, chapter, checkpoint, POV, location, map, character, asset, and visual-state IDs;
 - available map levels and parent/child navigation, safe asset references, crops/layers, logical or coordinate marker anchors, optional safe waypoints, and fallback/alt text;
@@ -28,7 +30,7 @@ MaxQuill expects an already-filtered projection for a book/chapter/progress chec
 
 MaxQuill must reject or hide invalid data and fail closed. It must never infer visibility from the presence of raw fields, calculate spoilers from production rules, or expose sibling states/assets that are not included in the safe projection. Server/package generation is the primary secrecy boundary; client-side conditional rendering is defense in depth.
 
-Reader progress selects the maximum authorized checkpoint no later than the reader's current progress. Opening an older chapter must not silently advance unlock state. The concrete progress/unlock policy remains a product decision, but a reader at an early chapter can never receive or render later-chapter gallery or map truth.
+Reader progress selects the maximum authorized checkpoint no later than the reader's current progress. Opening an older chapter must not silently advance unlock state and must not reduce `furthestChapter`. Opening a later chapter URL does not unlock later visuals until that chapter is actually reached (marked read or opened as the next sequential chapter). Continue Reading still uses last-opened `currentChapter`; companion unlocks use `furthestChapter` plus `readChapters` from the existing progress record. No second progress store is introduced.
 
 ## Map experience
 
@@ -58,7 +60,20 @@ The production Visual Bible is author/production-facing and may include secrets,
 
 Book Architecture owns semantic location identity, scene/chapter location and POV conventions, character presence/introduction conventions, reveal/discovery semantics, visual-asset references, and the exportable reader-safe companion contract. A concrete book owns its locations, maps, canonical appearances, reveal timing, approvals, and visual states.
 
-MaxQuill owns the conditional map icon, overlays, map/marker rendering, zoom UX, Gallery interaction, progress integration, preferences, accessibility, cache behavior, and mobile experience. It may validate the handoff and display less than supplied, but it must not derive or reveal protected truth.
+MaxQuill owns the optional companion loader (`companion.js` / `getCompanionState`), conditional map icon, overlays, map/marker rendering, zoom UX, Gallery interaction, progress integration, preferences, accessibility, cache behavior, and mobile experience. It may validate the handoff and display less than supplied, but it must not derive or reveal protected truth.
+
+## Asset storage
+
+Companion assets are provider-neutral references (`assetId`, `type`, `reference`). MaxQuill currently serves static files from the repository `content/` tree and has no object-storage or CDN pipeline.
+
+Recommended progression, without migrating infrastructure in this pass:
+
+1. **Repo asset** — `reference` is a site-relative path such as `content/books/<book-id>/assets/maps/city-v1.webp`. Suitable for demos and private previews.
+2. **Object storage** — `reference` becomes a storage URI when a book outgrows git-hosted binaries. The manifest still names a stable `VASSET-*` identity.
+3. **CDN** — cache the versioned object URL; do not replace `VASSET-*` IDs when bytes move.
+4. **Immutable references** — treat `VASSET-*` plus an explicit file version in the path/URI as the cache key. Missing assets omit the visual and leave prose readable.
+
+The companion contract must not assume a CDN, bucket, or host. Reader-safe exports include only assets already unlocked for that checkpoint.
 
 ## Acceptance criteria before implementation ships
 
