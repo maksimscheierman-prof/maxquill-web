@@ -26,3 +26,5 @@ Deploy the repository root with no framework preset or build command. The reader
 ## Future
 
 MaxQuill is an external owner-review client; the book repository remains the canonical source of truth. See `docs/review-integration.md` for the contract-exact handoff.
+
+The optional [Visual Companion product direction](docs/visual-companion.md) plans progress-aware chapter maps and a reader-invoked Character Gallery. It is not implemented in the current MVP and does not alter existing review packages or books without companion metadata. See also the [product backlog](docs/product-roadmap.md).
