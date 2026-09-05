@@ -1,7 +1,7 @@
 (() => {
   "use strict";
-  const BOOK_URL = "content/demo-book/book.json";
-  const PROGRESS_KEY = "maxquill:progress:demo-book";
+  const BOOK_URL = "content/book-001/book.json";
+  const PROGRESS_KEY = "maxquill:progress:book-001";
   const PREFS_KEY = "maxquill:reader-preferences";
   const MODE_KEY = "maxquill:reader-mode";
   const defaults = { theme: "dark", fontSize: "medium", textWidth: "normal", lineHeight: "normal" };

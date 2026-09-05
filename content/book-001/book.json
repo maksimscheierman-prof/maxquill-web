@@ -1,0 +1,18 @@
+{
+  "id": "book-001",
+  "title": "Book 01",
+  "author": "MaxByte",
+  "description": "Owner-review candidate for Chapter 1. This is a REVIEW_READY draft, not a finalized or published chapter.",
+  "status": "Owner Review",
+  "lastUpdated": "September 2026",
+  "chapters": [
+    {
+      "number": 1,
+      "slug": "001",
+      "chapterId": "chapter_0001",
+      "title": "The Book He Never Asked For",
+      "status": "REVIEW_READY",
+      "version": 1
+    }
+  ]
+}

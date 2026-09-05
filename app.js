@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const BOOK_URL = "content/demo-book/book.json", KEY = "maxquill:progress:demo-book";
+  const BOOK_URL = "content/book-001/book.json", KEY = "maxquill:progress:book-001";
   function progress() { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (error) { console.warn("Could not read progress.", error); return null; } }
   async function loadBook() { const response = await fetch(BOOK_URL); if (!response.ok) throw new Error(`Book data returned ${response.status}`); return response.json(); }
   const readerUrl = (book, chapter) => `reader.html?book=${encodeURIComponent(book.id)}&chapter=${chapter.number}&version=${chapter.version}`;

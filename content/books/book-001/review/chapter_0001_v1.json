@@ -1,0 +1,965 @@
+{
+  "schemaVersion": 1,
+  "type": "review_ready_chapter",
+  "bookId": "book-001",
+  "chapterId": "chapter_0001",
+  "chapterNumber": 1,
+  "chapterVersion": 1,
+  "status": "REVIEW_READY",
+  "title": "The Book He Never Asked For",
+  "exportedAt": "2026-09-05T16:23:48.224Z",
+  "content": [
+    {
+      "id": "p001",
+      "text": "Kael woke to the smell of rice porridge and wet wood."
+    },
+    {
+      "id": "p002",
+      "text": "The room was already busy in the soft, half-awake way of the orphanage. Someone had bumped a bucket somewhere down the hall. A little child was crying in the distance, not hard enough to be frightened—just enough to announce displeasure at being made to get up. Through the cracked shutter beside his bed, morning light slanted in pale and thin, turning dust into a drifting gold haze."
+    },
+    {
+      "id": "p003",
+      "text": "Kael lay there for one breath longer than he needed, listening."
+    },
+    {
+      "id": "p004",
+      "text": "Boots on the floorboards. Miss Maera’s brisk voice, low and clipped. A spoon striking a pot. The scrape of a chair. The ordinary sounds of a place that had too many people, too few things, and somehow still managed to feel warm."
+    },
+    {
+      "id": "p005",
+      "text": "“Finally,” a voice said from the next pallet over. Tarin was already sitting up, hair sticking out in every direction, eyes bright with the kind of energy that made sleep feel like a personal offense. “I thought you’d miss breakfast and die of stupidity.”"
+    },
+    {
+      "id": "p006",
+      "text": "Kael blinked at him. “That’s not how dying works.”"
+    },
+    {
+      "id": "p007",
+      "text": "“It is if you refuse food long enough.”"
+    },
+    {
+      "id": "p008",
+      "text": "Lyra, on the far side of the room, made a small sound that might have been a laugh if she wanted to flatter Tarin. She had one knee up under the blanket and was already tying back her hair with practiced fingers. Even half-dressed and still groggy, she looked more awake than the rest of them put together."
+    },
+    {
+      "id": "p009",
+      "text": "“Move,” she said, and tossed Kael his shirt."
+    },
+    {
+      "id": "p010",
+      "text": "He caught it one-handed and sat up. The room around them held the rest of the morning in its usual scattered shape: two younger children already gone, one empty pallet with a blanket kicked to the floor, a pair of shoes by the door that belonged to someone who would spend half the day looking for them. The orphanage never really became quiet. It only changed the kind of noise it made."
+    },
+    {
+      "id": "p011",
+      "text": "Kael pulled on his shirt and glanced toward the small shelf near the wall."
+    },
+    {
+      "id": "p012",
+      "text": "The book was still there."
+    },
+    {
+      "id": "p013",
+      "text": "It sat wedged between a chipped cup and a bundle of folded cloth, its cover worn smooth at the corners from too many fingers and too much careful handling. It was not special in any obvious way. It had no shining lock, no strange sigils, no hidden clasp. Just a plain old book with a repaired spine and a page ribbon that had frayed into threads."
+    },
+    {
+      "id": "p014",
+      "text": "But it had cost Maera more than it should have."
+    },
+    {
+      "id": "p015",
+      "text": "He looked away before the thought could settle too deeply. That was easier than naming the feeling attached to it."
+    },
+    {
+      "id": "p016",
+      "text": "“Kael.” Lyra’s voice had that look in it already, the one that meant she had noticed him looking at something he’d rather pretend was invisible. “If you’re done staring at your precious book, we’re going to eat before Tarin steals something and calls it breakfast.”"
+    },
+    {
+      "id": "p017",
+      "text": "“I heard that,” Tarin said."
+    },
+    {
+      "id": "p018",
+      "text": "“Good.”"
+    },
+    {
+      "id": "p019",
+      "text": "Kael stood, stretched once, and tugged his hair back from his face. Tarin was already at the door, impatient in the way only Tarin could be impatient: like the world had insulted him by not moving fast enough to keep up. Lyra followed more slowly, but she was the one who actually kept the other two from colliding with walls, children, or their own bad ideas."
+    },
+    {
+      "id": "p020",
+      "text": "The hallway was narrow and worn smooth where generations of feet had gone through it. The floor creaked in a pattern Kael knew well enough to step around the worst boards without thinking. The kitchen smelled of porridge, onion, and smoke from a stove that had seen better years. Miss Maera stood near the hearth with her sleeves rolled high, one hand on a spoon and the other shooing a smaller child away from the pot."
+    },
+    {
+      "id": "p021",
+      "text": "“No, you do not need to taste it before it’s done,” she said."
+    },
+    {
+      "id": "p022",
+      "text": "The child looked affronted by the very idea of being denied. Miss Maera pointed at a bench. The child obeyed immediately, muttering under their breath."
+    },
+    {
+      "id": "p023",
+      "text": "Maera’s eyes flicked to Kael, Tarin, and Lyra as they entered. “About time. Sit.”"
+    },
+    {
+      "id": "p024",
+      "text": "It was not a request. The three of them sat."
+    },
+    {
+      "id": "p025",
+      "text": "Breakfast was simple: porridge with a little salt, and today, if Kael was not imagining it, a few thin slices of apple mixed in so the smallest children would stop complaining. Maera moved among them with a bowl in one hand and annoyance in the other, but she watched who had eaten and who had not. She set the largest portion in front of the younger one with the scraped knee before the child even asked."
+    },
+    {
+      "id": "p026",
+      "text": "Kael saw that. He always saw that."
+    },
+    {
+      "id": "p027",
+      "text": "Tarin shoveled in his first mouthful, then frowned. “This needs more sugar.”"
+    },
+    {
+      "id": "p028",
+      "text": "“This needs less of you,” Maera said without looking at him."
+    },
+    {
+      "id": "p029",
+      "text": "Lyra hid a smile behind her spoon. Kael tried not to."
+    },
+    {
+      "id": "p030",
+      "text": "The room around the table felt crowded in the familiar way. One child at the far end was arguing over a spoon with another child who was too young to understand that arguing for the spoon had become a game. Someone had spilt a little porridge on the floor, and Maera had already noticed and was choosing, for the moment, not to explode. A younger boy with a runny nose was trying to feed half his bowl to the girl beside him, who kept looking offended by the generosity."
+    },
+    {
+      "id": "p031",
+      "text": "Kael ate and listened."
+    },
+    {
+      "id": "p032",
+      "text": "“That’s mine,” the younger boy said."
+    },
+    {
+      "id": "p033",
+      "text": "“Then why did you put it in my bowl?”"
+    },
+    {
+      "id": "p034",
+      "text": "“I wanted to share.”"
+    },
+    {
+      "id": "p035",
+      "text": "“You’re sharing badly.”"
+    },
+    {
+      "id": "p036",
+      "text": "Miss Maera clicked her tongue. “If either of you makes that floor worse, you’ll be scrubbing it after chores.”"
+    },
+    {
+      "id": "p037",
+      "text": "Both children froze in immediate alarm."
+    },
+    {
+      "id": "p038",
+      "text": "Tarin leaned close to Kael and murmured, “She’s getting soft.”"
+    },
+    {
+      "id": "p039",
+      "text": "Kael gave him a flat look."
+    },
+    {
+      "id": "p040",
+      "text": "Tarin grinned."
+    },
+    {
+      "id": "p041",
+      "text": "Lyra reached over and flicked him on the ear. “She heard that.”"
+    },
+    {
+      "id": "p042",
+      "text": "“Worth it.”"
+    },
+    {
+      "id": "p043",
+      "text": "Maera did hear it, of course. She always heard everything eventually. But she was also busy tying a cloth around a little girl’s wrist where she had scratched herself on something sharp, and that mattered more than Tarin’s mouth. She checked the cut, muttered that it was shallow, and told the girl to be more careful with the stair rail because “the stairs are old enough to resent you.”"
+    },
+    {
+      "id": "p044",
+      "text": "The girl nodded solemnly, as if stairs could indeed be vindictive."
+    },
+    {
+      "id": "p045",
+      "text": "Kael finished his bowl and scraped the bottom clean. The meal did not fill him all the way, but it never did. The orphanage ran on discipline, ingenuity, and hunger kept politely out of sight. Still, the porridge had been warm, and the apple had made the whole thing feel almost generous."
+    },
+    {
+      "id": "p046",
+      "text": "When they were done, Maera clapped once. “Chores.”"
+    },
+    {
+      "id": "p047",
+      "text": "A collective groan rose from the room."
+    },
+    {
+      "id": "p048",
+      "text": "“Not you,” she added immediately to the smallest children who had already begun to look like betrayal had entered the building. “You are too little to be useful and too loud to ignore. Go outside and keep out of trouble.”"
+    },
+    {
+      "id": "p049",
+      "text": "That caused immediate delight. The youngest scrambled for the door with the speed of children who had been told not to do something and heard only encouragement."
+    },
+    {
+      "id": "p050",
+      "text": "Kael rose, set his bowl aside, and caught Tarin already looking toward the front entryway. That look meant a plan was forming, or at least the shape of one. Lyra noticed too and gave him a warning glance."
+    },
+    {
+      "id": "p051",
+      "text": "“What?” Tarin asked innocently."
+    },
+    {
+      "id": "p052",
+      "text": "Lyra’s expression did not change. “You have your thinking face.”"
+    },
+    {
+      "id": "p053",
+      "text": "“That’s not a thing.”"
+    },
+    {
+      "id": "p054",
+      "text": "“It is on your face.”"
+    },
+    {
+      "id": "p055",
+      "text": "Kael almost smiled. Almost."
+    },
+    {
+      "id": "p056",
+      "text": "Maera, turning back toward the stove, said, “If I find any of you sneaking off before your work is finished, I’ll make you peel roots until your hands fall off.”"
+    },
+    {
+      "id": "p057",
+      "text": "“That sounds exaggerated,” Kael said."
+    },
+    {
+      "id": "p058",
+      "text": "She shot him a look over her shoulder. “And yet you understood me perfectly.”"
+    },
+    {
+      "id": "p059",
+      "text": "He accepted the accusation because it was true."
+    },
+    {
+      "id": "p060",
+      "text": "Chores split them up for a while. Kael helped carry water, swept the hall, and repaired a loose latch on a storage door with a bent nail Maera produced from somewhere in her apron. Tarin was sent to the yard with two other boys to haul damp wood into the shed, which became an excuse for loud complaints and one near fight. Lyra, somehow, ended up helping one of the smaller children button a shirt while also answering Maera’s questions about missing cloth."
+    },
+    {
+      "id": "p061",
+      "text": "By the time the morning began to soften toward midday, the orphanage had settled into its usual shape: a dozen small tasks held together by habit and stubbornness."
+    },
+    {
+      "id": "p062",
+      "text": "Kael stepped out through the front and looked toward the city."
+    },
+    {
+      "id": "p063",
+      "text": "Verdantis always made him think of a forest that had learned how to stand upright and call itself a place."
+    },
+    {
+      "id": "p064",
+      "text": "The orphanage sat in the lower part of the city, but even from here the trees dominated everything. Massive trunks rose between buildings, some natural, some shaped by old craft into living walls and balconies and walkways. Rootways threaded between foundations. Thick branches crossed overhead far above the street, joined by rope bridges and platforms and the occasional broad span of reinforced wood that looked less built than grown into place."
+    },
+    {
+      "id": "p065",
+      "text": "He started walking with Tarin and Lyra when they caught up to him at the gate."
+    },
+    {
+      "id": "p066",
+      "text": "The air outside smelled of leaf damp, river water, and the faint sweetness of sap warmed by the sun. Foot traffic moved along the paths with the easy familiarity of a place built vertically as much as horizontally. Kael had grown up in it, so he knew where the safest steps were, where the roots jutted out under old moss, where a roofline hid a ladder up to a higher terrace."
+    },
+    {
+      "id": "p067",
+      "text": "He also knew that the city got larger the higher you climbed."
+    },
+    {
+      "id": "p068",
+      "text": "From the lower roads, the trunks looked like pillars of bark and green shadow. From above, they became a layered world of homes and paths and suspended platforms, each one tucked into the forest’s own architecture. Verdantis was not a city cut out of the woods. It was a city that had been persuaded to live inside them."
+    },
+    {
+      "id": "p069",
+      "text": "Tarin walked with his hands behind his head, glancing up at everything as if he still expected the world to surprise him. “You ever think,” he said, “that if you climbed high enough, you’d just keep going and end up in the clouds?”"
+    },
+    {
+      "id": "p070",
+      "text": "“That’s not how trees work,” Kael said."
+    },
+    {
+      "id": "p071",
+      "text": "“You don’t know that.”"
+    },
+    {
+      "id": "p072",
+      "text": "Lyra made a skeptical sound. “He knows that.”"
+    },
+    {
+      "id": "p073",
+      "text": "“I’m only saying,” Tarin replied, “it would be more interesting.”"
+    },
+    {
+      "id": "p074",
+      "text": "Kael followed the line of Tarin’s glance and saw one of the great trunks in the distance, broader than a house, vanishing into canopy and haze. Beyond it, and beyond the roofs and walkways, the upper reach of Verdantis rose into the light."
+    },
+    {
+      "id": "p075",
+      "text": "He could see the largest of the regional great trees if he looked far enough. Even from this distance it gave the sense of being older than anything else around it, its crown lost in the brightness above. It was the kind of sight that made the city feel less like a settlement and more like a layered inheritance."
+    },
+    {
+      "id": "p076",
+      "text": "The wall beyond the city edge was easier to spot from a height."
+    },
+    {
+      "id": "p077",
+      "text": "Kael knew what it looked like up close, but from here the Woven Wall read as a long, grey mass stitched into the landscape. Interlocked giant vines and reinforcement lines gave it the look of stone from a distance. Healthy stretches looked solid, almost dull, as if the forest had decided to harden itself into a barrier. There were places where the color shifted a little greener in the sun, though Kael had long since learned that this did not mean anything useful. The wall was simply there, huge and quiet, a fact of life as reliable as rain."
+    },
+    {
+      "id": "p078",
+      "text": "Below and farther out, where the city opened toward the river, he could make out the Root Bridge crossing the water in a long curve. The river itself flashed pale in the sun, moving toward the harbor with a steady, muddy shine. He knew the bridge by habit more than need, but it was one of the places the city felt most like itself: root and water and road all meeting in the same span."
+    },
+    {
+      "id": "p079",
+      "text": "Lyra shaded her eyes and squinted toward the upper paths. “If we take the lift route, we can check the station first.”"
+    },
+    {
+      "id": "p080",
+      "text": "Tarin groaned immediately. “The guards there are awful.”"
+    },
+    {
+      "id": "p081",
+      "text": "“They’re guards,” Lyra said. “That’s generally the point.”"
+    },
+    {
+      "id": "p082",
+      "text": "Kael glanced at her. “What are you checking?”"
+    },
+    {
+      "id": "p083",
+      "text": "Her expression shifted in a way he recognized. Not secretive exactly. More like she had already decided something and was waiting for the rest of the world to catch up. “Nothing important.”"
+    },
+    {
+      "id": "p084",
+      "text": "Tarin made a face. “That means it’s important.”"
+    },
+    {
+      "id": "p085",
+      "text": "Lyra did not deny it."
+    },
+    {
+      "id": "p086",
+      "text": "Kael looked between them. “You’re planning something.”"
+    },
+    {
+      "id": "p087",
+      "text": "“No,” Lyra said."
+    },
+    {
+      "id": "p088",
+      "text": "Tarin said, “Yes.”"
+    },
+    {
+      "id": "p089",
+      "text": "They both spoke at once, which told Kael almost everything he needed to know and absolutely none of the details."
+    },
+    {
+      "id": "p090",
+      "text": "The path they took climbed through a section of root-laced terraces where the buildings leaned into the trunks instead of against them. A pair of workers passed carrying bundles of cut reed. A woman selling dried fruit called something after them that Tarin ignored and Lyra politely pretended not to hear. The city thinned and opened as they went higher, until the overlook came into view: an unofficial rise tucked above the orphanage routes, not quite a public platform and not quite private either, just a place children had claimed over the years because it gave them a clear view and enough shade to sit."
+    },
+    {
+      "id": "p091",
+      "text": "The trio used it often enough that the stones there had become familiar underfoot."
+    },
+    {
+      "id": "p092",
+      "text": "Kael sat on the low root edge and looked out."
+    },
+    {
+      "id": "p093",
+      "text": "From here Verdantis spread out like a living map. Tree trunks rose through the city in thick columns. Bridges connected platforms at different heights. Roofs layered over walkways. The distant wall sat at the edge of everything, grey and massive, with the river threading past the lower reaches. Beyond that, the green of the region pressed on without end."
+    },
+    {
+      "id": "p094",
+      "text": "Tarin dropped down beside him with far less grace. Lyra sat a little apart, knees drawn up, scanning the scene with the practical attention she brought to most things. She was the kind of person who could turn a view into a problem if necessary."
+    },
+    {
+      "id": "p095",
+      "text": "“This is the best part,” Tarin said, gesturing broadly as if he’d personally built the city."
+    },
+    {
+      "id": "p096",
+      "text": "“The best part is not falling off the overlook,” Lyra said."
+    },
+    {
+      "id": "p097",
+      "text": "He laughed. “You say that like it happens often.”"
+    },
+    {
+      "id": "p098",
+      "text": "“It happens exactly often enough.”"
+    },
+    {
+      "id": "p099",
+      "text": "Kael rested his arms on his knees and let the breeze move through the higher branches around them. The smell up here was different. Less smoke, more leaf. The city sounds carried thinner too—tools striking wood, voices, the distant call of a vendor, the river always moving somewhere below."
+    },
+    {
+      "id": "p100",
+      "text": "He liked this place because it made everything feel larger and smaller at the same time. Larger, because the city opened out until the eye could wander for a long way. Smaller, because from up here the people below became patterns and motion rather than the whole of the world."
+    },
+    {
+      "id": "p101",
+      "text": "Tarin leaned back on his hands and stared up at the canopy. “Do you think the old storyteller is coming today?”"
+    },
+    {
+      "id": "p102",
+      "text": "Lyra nodded once. “He usually does.”"
+    },
+    {
+      "id": "p103",
+      "text": "Kael’s attention sharpened a little at that. He did not show it much."
+    },
+    {
+      "id": "p104",
+      "text": "The weekly visits were ordinary enough now to feel like part of the orphanage’s rhythm. The old man came, wore the same worn travel clothes and practical boots, brought small things for the children, and told stories that were usually louder than they were true. Kael liked them anyway."
+    },
+    {
+      "id": "p105",
+      "text": "Not because he believed everything. Because he didn’t."
+    },
+    {
+      "id": "p106",
+      "text": "That was part of the appeal."
+    },
+    {
+      "id": "p107",
+      "text": "By the time they headed back down, the sun had shifted enough to cut softer stripes through the leaves. The children were already gathering in the yard by the time Kael, Tarin, and Lyra returned. Miss Maera stood near the wall with her hands on her hips, watching the approach of the old man at the gate."
+    },
+    {
+      "id": "p108",
+      "text": "He looked exactly as Kael expected."
+    },
+    {
+      "id": "p109",
+      "text": "Weathered face. Travel-worn coat. Boots that had seen roads far beyond Verdantis, but not so many that they had fallen apart. A small pack slung over one shoulder and a bundle tied neatly at his side. Nothing about him suggested power. He looked like the sort of man who knew how to stretch a meal, keep a fire going in the rain, and sleep lightly in unfamiliar places."
+    },
+    {
+      "id": "p110",
+      "text": "He also carried a cloth pouch of small sweets, which immediately made him more popular than any formal introduction could have managed."
+    },
+    {
+      "id": "p111",
+      "text": "“Children,” he said, with a voice that carried without trying too hard."
+    },
+    {
+      "id": "p112",
+      "text": "The younger ones surged first. He smiled at that, a little crookedly, and opened the pouch so they could each take one thing in turn. Little wrapped candies. Dried fruit. A few small, curious objects that might have been worthless on a market table and fascinating in a child’s hand. He did not hand Kael anything special. Kael had never expected him to."
+    },
+    {
+      "id": "p113",
+      "text": "That was fine."
+    },
+    {
+      "id": "p114",
+      "text": "The old man settled onto one of the low benches in the yard, and the children gathered around him in a loose, excited ring. Tarin claimed a spot near the front because of course he did. Lyra sat where she could see both the storyteller and the boys. Kael dropped down a little to the side, more comfortable there."
+    },
+    {
+      "id": "p115",
+      "text": "The storyteller rubbed his hands together once, as if warming them, and looked over the group. “Now,” he said, “what shall it be today?”"
+    },
+    {
+      "id": "p116",
+      "text": "“Roc!” one of the younger children shouted immediately."
+    },
+    {
+      "id": "p117",
+      "text": "“Again?” Maera muttered from the edge of the yard, but she was smiling faintly."
+    },
+    {
+      "id": "p118",
+      "text": "“Roc,” several voices echoed."
+    },
+    {
+      "id": "p119",
+      "text": "The old man raised a brow. “You’ve all heard this one before.”"
+    },
+    {
+      "id": "p120",
+      "text": "“Tell it anyway!” Tarin said."
+    },
+    {
+      "id": "p121",
+      "text": "Kael leaned back on his palms. “If it’s the same one, don’t make it longer this time.”"
+    },
+    {
+      "id": "p122",
+      "text": "A few children laughed. The old storyteller pointed a finger at him with exaggerated solemnity. “A critic already. Very well. I shall attempt to survive your standards.”"
+    },
+    {
+      "id": "p123",
+      "text": "Kael rolled his eyes, but not hard enough to hide the edge of amusement."
+    },
+    {
+      "id": "p124",
+      "text": "The old man began."
+    },
+    {
+      "id": "p125",
+      "text": "He told it as all good stories were told: not as a plain recounting of events, but as a thing that moved. His voice changed with the shape of the tale. At one moment it became low and dangerous, at another fast and bright, and then suddenly he would pause just long enough for the children to lean in."
+    },
+    {
+      "id": "p126",
+      "text": "“There was a Roc,” he said, “so large and so swift that storm wind seemed to chase it rather than the other way around. A Tier-5 beast, they said.”"
+    },
+    {
+      "id": "p127",
+      "text": "Several children gasped."
+    },
+    {
+      "id": "p128",
+      "text": "Kael snorted quietly. “They said.”"
+    },
+    {
+      "id": "p129",
+      "text": "The storyteller ignored that with the ease of a man who had heard skepticism before. “It moved toward the Air Bastion—”"
+    },
+    {
+      "id": "p130",
+      "text": "“Why?” Tarin blurted."
+    },
+    {
+      "id": "p131",
+      "text": "The old man lifted one shoulder. “That, my boy, is part of what makes a story worth telling. Nobody in the tale knew why either.”"
+    },
+    {
+      "id": "p132",
+      "text": "Kael folded his arms. That at least sounded more believable than some of the rest."
+    },
+    {
+      "id": "p133",
+      "text": "The storyteller went on, and the yard around him changed. Not literally. The bench was still the bench, the dirt still dirt, the children still children. But the way they listened made the world tilt. The old man painted the storm with his hands and voice: wind snapping through the sky, thunder cracking so hard it felt like the air itself had broken, rain lashing down so violently that even seeing the beast became difficult."
+    },
+    {
+      "id": "p134",
+      "text": "“The Roc was not simply huge,” he said. “It was cunning. It hunted through the storm and used it as cover.”"
+    },
+    {
+      "id": "p135",
+      "text": "A child near the back made a frightened little noise."
+    },
+    {
+      "id": "p136",
+      "text": "“And five Guardians went out to stop it,” the storyteller continued. “Five, each with a different strength.”"
+    },
+    {
+      "id": "p137",
+      "text": "Tarin was already leaning forward. “Which five?”"
+    },
+    {
+      "id": "p138",
+      "text": "The storyteller gave him a look of theatrical disappointment. “You know I’m not giving you a clean list every time.”"
+    },
+    {
+      "id": "p139",
+      "text": "Tarin slumped a little, dissatisfied."
+    },
+    {
+      "id": "p140",
+      "text": "Kael listened with one brow faintly raised. The old man loved his dramatic details. That was part of the routine too. It was difficult to tell where embellishment ended and performance began, which was probably the point."
+    },
+    {
+      "id": "p141",
+      "text": "In the story, the first strike came from the air itself."
+    },
+    {
+      "id": "p142",
+      "text": "“The Guardian of Air moved first,” the old man said, snapping his fingers once. “A shift in the storm, a warning passed before the Roc could close. Fire heard it.”"
+    },
+    {
+      "id": "p143",
+      "text": "“Of course Fire heard it,” Tarin muttered."
+    },
+    {
+      "id": "p144",
+      "text": "Lyra elbowed him lightly. “Let him talk.”"
+    },
+    {
+      "id": "p145",
+      "text": "Kael watched the storyteller’s hands. Air, then Fire. The old man was building momentum, letting the children picture too much and too little at the same time."
+    },
+    {
+      "id": "p146",
+      "text": "“Then there was blood-red cloth,” he said, voice dropping, “and the severed arm of Fire—”"
+    },
+    {
+      "id": "p147",
+      "text": "Several children shrieked in horrified delight."
+    },
+    {
+      "id": "p148",
+      "text": "Kael gave him a dry look. “That’s not subtle.”"
+    },
+    {
+      "id": "p149",
+      "text": "The old storyteller spread his hands. “No one said it was.”"
+    },
+    {
+      "id": "p150",
+      "text": "The tale rolled on. Earth’s barrier arrived too late to stop what had already been done, only a heartbeat too slow against a beast moving as if distance meant nothing. Water turned the storm rain into a great search of razor-sharp force, flinging it wide through the air. Most of it missed, but not all. A few struck true enough to leave proof."
+    },
+    {
+      "id": "p151",
+      "text": "“Feathers,” the storyteller said, tapping his chest. “Blood. Enough to know the Roc was not untouched.”"
+    },
+    {
+      "id": "p152",
+      "text": "One of the small children looked horrified. Another looked thrilled in a way that suggested the story’s danger made it better, not worse."
+    },
+    {
+      "id": "p153",
+      "text": "Kael leaned his head back and let out a breath through his nose. The old man knew how to keep a crowd."
+    },
+    {
+      "id": "p154",
+      "text": "Then came the trick."
+    },
+    {
+      "id": "p155",
+      "text": "“On the second attack,” the storyteller said, lowering his voice as if sharing a secret, “the Roc saw the injured Fire Guardian and thought it had found an opening.”"
+    },
+    {
+      "id": "p156",
+      "text": "“Aha,” Tarin said, already grinning."
+    },
+    {
+      "id": "p157",
+      "text": "The storyteller pointed at him. “Exactly. It lunged for bait.”"
+    },
+    {
+      "id": "p158",
+      "text": "In the performance, the bait burst into a storm of roots."
+    },
+    {
+      "id": "p159",
+      "text": "Nature, as the old man framed it, rose around the beast in an enormous trap, roots twisting up around its wings and body just enough to slow it, to make it stumble, to make the moment feel certain. Then the storyteller leaned forward, eyes glinting, and said with full confidence, “It fell toward the sun.”"
+    },
+    {
+      "id": "p160",
+      "text": "A loud chorus of objections rose immediately."
+    },
+    {
+      "id": "p161",
+      "text": "“It can’t fall toward the sun!”"
+    },
+    {
+      "id": "p162",
+      "text": "“That’s not a thing!”"
+    },
+    {
+      "id": "p163",
+      "text": "“You’re making it up again!”"
+    },
+    {
+      "id": "p164",
+      "text": "Kael crossed one leg over the other and said, “That’s the part where you realize he’s laughing at you.”"
+    },
+    {
+      "id": "p165",
+      "text": "The storyteller looked offended. “I would never.”"
+    },
+    {
+      "id": "p166",
+      "text": "Lyra gave him a skeptical look. “You absolutely would.”"
+    },
+    {
+      "id": "p167",
+      "text": "“Only a little.”"
+    },
+    {
+      "id": "p168",
+      "text": "The children laughed, and the old man let them. Then, with exactly the timing he needed, he shifted the story again."
+    },
+    {
+      "id": "p169",
+      "text": "The real Fire Guardian was below, he said. The one the Roc thought it had beaten. There was a temporary support of roots bracing the Guardian’s arm or hand, enough to keep it in the fight, enough to make the next blaze possible. The story did not explain how. It did not need to."
+    },
+    {
+      "id": "p170",
+      "text": "“Then came the second sun,” the old man said."
+    },
+    {
+      "id": "p171",
+      "text": "This time even Kael felt the urge to look up, as if some impossible brightness might actually be hanging above the yard."
+    },
+    {
+      "id": "p172",
+      "text": "The Roc twisted to spoil the trap. Air corrected its trajectory. Earth responded by launching Fire up a giant pillar, correcting the angle again, forcing the clash into place. Rain flashed to steam. Air tore the haze away. The impact was so violent the storyteller made the children flinch on instinct, and then he painted the aftermath with one sweeping hand."
+    },
+    {
+      "id": "p173",
+      "text": "“A mountain was ripped open.”"
+    },
+    {
+      "id": "p174",
+      "text": "The yard fell quiet for one beat."
+    },
+    {
+      "id": "p175",
+      "text": "Then one of the younger boys whispered, “That’s impossible.”"
+    },
+    {
+      "id": "p176",
+      "text": "The old storyteller smiled as if he had been waiting for that exact response. “And yet.”"
+    },
+    {
+      "id": "p177",
+      "text": "Kael looked at him sidelong. “And yet is not proof.”"
+    },
+    {
+      "id": "p178",
+      "text": "“No,” the man agreed easily. “But it is a good ending to a good strike.”"
+    },
+    {
+      "id": "p179",
+      "text": "The children were buzzing now, voices climbing over each other. Tarin was already arguing that no bird-beast could be that strong. Lyra was telling him he was missing the point. A younger child insisted that if it had been a real Roc, it would have been bigger. Another child said that if a mountain could be torn open, then maybe the sky could be cut too."
+    },
+    {
+      "id": "p180",
+      "text": "Kael listened to the confusion and let it wash around him."
+    },
+    {
+      "id": "p181",
+      "text": "The old storyteller took it all in with the same mild amusement he always did. He was not trying to win the argument. He was not trying to prove anything. He was performing a story."
+    },
+    {
+      "id": "p182",
+      "text": "That was enough."
+    },
+    {
+      "id": "p183",
+      "text": "At last he lifted a hand and brought the noise down a notch. “The Roc retreated.”"
+    },
+    {
+      "id": "p184",
+      "text": "The children quieted again."
+    },
+    {
+      "id": "p185",
+      "text": "“It was wounded,” he said. “Not dead. Not beaten cleanly. But it withdrew before it reached the Bastion.”"
+    },
+    {
+      "id": "p186",
+      "text": "He glanced over the group, and for a moment the whole yard seemed to lean toward him."
+    },
+    {
+      "id": "p187",
+      "text": "“Sometimes,” he finished, “you do not win by killing what comes for you. Sometimes you win by keeping it from the door.”"
+    },
+    {
+      "id": "p188",
+      "text": "Kael’s gaze stayed on the storyteller a moment longer than the others’. There was a kind of blunt sense in that line that he could not argue with, even if he could argue with the rest of the tale."
+    },
+    {
+      "id": "p189",
+      "text": "Tarin frowned. “So the Guardians lost?”"
+    },
+    {
+      "id": "p190",
+      "text": "“Not if the Bastion stood,” Lyra said quietly."
+    },
+    {
+      "id": "p191",
+      "text": "The old man nodded once, as if she had said exactly the answer he expected. “There’s always something stronger.”"
+    },
+    {
+      "id": "p192",
+      "text": "That was the line the children liked best, because it sounded like hope and warning at the same time."
+    },
+    {
+      "id": "p193",
+      "text": "Kael did not know whether it was true. He suspected that was part of why he remembered it."
+    },
+    {
+      "id": "p194",
+      "text": "The storyteller did not linger long after the tale ended. That was another part of the ritual. He answered a few shouted questions with varying degrees of patience, allowed himself to be pestered for the last sweets, and then rose with a hand to his lower back as if the bench had personally offended him."
+    },
+    {
+      "id": "p195",
+      "text": "Maera crossed the yard to speak with him briefly, though Kael could not hear what they said. It did not look tense. Just ordinary. A caretaker and a visitor exchanging the kind of polite words adults used when children were still nearby."
+    },
+    {
+      "id": "p196",
+      "text": "By the time the yard settled again, evening had started to thin the light. Children drifted toward the house in twos and threes. The younger ones were already drowsy enough to complain about beds. The older ones were slower to give up the moment."
+    },
+    {
+      "id": "p197",
+      "text": "Lyra caught Kael and Tarin by the sleeve before they could disappear into the hall."
+    },
+    {
+      "id": "p198",
+      "text": "“Come here,” she said."
+    },
+    {
+      "id": "p199",
+      "text": "Tarin frowned. “If this is chores again—”"
+    },
+    {
+      "id": "p200",
+      "text": "“It’s not chores.” She gave him a look that made him shut up. “It’s Maera.”"
+    },
+    {
+      "id": "p201",
+      "text": "Kael followed her across the room to the side table where the evening’s bread had been set out. The kitchen beyond was dimmer now, lit by only a couple of lamps and the red glow from the stove. Maera was elsewhere, which was exactly what made the tone of Lyra’s voice matter."
+    },
+    {
+      "id": "p202",
+      "text": "She lowered her own voice anyway. “Her birthday’s coming.”"
+    },
+    {
+      "id": "p203",
+      "text": "Kael glanced at Tarin. Tarin glanced back. Neither of them needed the reminder that birthdays mattered here more than they could afford to let them."
+    },
+    {
+      "id": "p204",
+      "text": "Lyra continued, “She’s not getting anything useful from us. We don’t have money. We don’t have time. So we’re doing something better.”"
+    },
+    {
+      "id": "p205",
+      "text": "Tarin opened his mouth. Closed it. Opened it again. “What?”"
+    },
+    {
+      "id": "p206",
+      "text": "Lyra looked between them with the steady, practical patience of someone who had already decided this was happening. “We get her the pastry.”"
+    },
+    {
+      "id": "p207",
+      "text": "Kael stared at her for a moment."
+    },
+    {
+      "id": "p208",
+      "text": "Not because the idea was impossible."
+    },
+    {
+      "id": "p209",
+      "text": "Because it was exactly the sort of impossible thing Lyra would choose."
+    },
+    {
+      "id": "p210",
+      "text": "“The one from the upper food stalls?” he asked."
+    },
+    {
+      "id": "p211",
+      "text": "She nodded once."
+    },
+    {
+      "id": "p212",
+      "text": "Tarin let out a breath. “That’s expensive.”"
+    },
+    {
+      "id": "p213",
+      "text": "“I know.”"
+    },
+    {
+      "id": "p214",
+      "text": "“We don’t have that kind of money.”"
+    },
+    {
+      "id": "p215",
+      "text": "“I know that too.”"
+    },
+    {
+      "id": "p216",
+      "text": "Kael leaned one shoulder against the table and thought it through the way he always did when something was about to become trouble. The ceremony food from the canopy level stalls was a luxury. Everyone in Verdantis knew that. Some of the best baked goods in the city came from bakeries high up in the restricted spaces near the richer terraces, where the ingredients were better and the prices were worse. Maera would never spend orphanage coin on something like that. That was exactly why Lyra wanted it."
+    },
+    {
+      "id": "p217",
+      "text": "Tarin rubbed the back of his neck. “You want us to steal a pastry.”"
+    },
+    {
+      "id": "p218",
+      "text": "Lyra did not blink. “I want us to give Maera something she would never get for herself.”"
+    },
+    {
+      "id": "p219",
+      "text": "That was not the same thing, and Kael thought Lyra knew perfectly well that the difference was mostly in how one explained it to oneself."
+    },
+    {
+      "id": "p220",
+      "text": "He looked at her. “You already know where it is.”"
+    },
+    {
+      "id": "p221",
+      "text": "“I know the area.”"
+    },
+    {
+      "id": "p222",
+      "text": "“That means yes.”"
+    },
+    {
+      "id": "p223",
+      "text": "“It means I have not insulted your intelligence.”"
+    },
+    {
+      "id": "p224",
+      "text": "Tarin stared between them, then said, “We’re not getting into the upper stalls without a plan.”"
+    },
+    {
+      "id": "p225",
+      "text": "Kael’s mouth twitched, almost a smile. “That’s usually the problem.”"
+    },
+    {
+      "id": "p226",
+      "text": "Lyra folded her arms. “Good. Then make one.”"
+    },
+    {
+      "id": "p227",
+      "text": "Tarin gave an indignant huff. “Why is it always his job?”"
+    },
+    {
+      "id": "p228",
+      "text": "“Because,” Lyra said, “you would solve it by running at the guards.”"
+    },
+    {
+      "id": "p229",
+      "text": "“That works sometimes.”"
+    },
+    {
+      "id": "p230",
+      "text": "“It works exactly never.”"
+    },
+    {
+      "id": "p231",
+      "text": "Kael could feel the shape of the thing already, the outline of a route, a distraction, an opening. Not yet a solution. Just the beginning of one."
+    },
+    {
+      "id": "p232",
+      "text": "He glanced toward the darkening hall where Maera’s footsteps had gone out of earshot. Then back to the two people who had been with him long enough to know exactly how to push him into action."
+    },
+    {
+      "id": "p233",
+      "text": "The old storyteller’s line still sat in the back of his mind."
+    },
+    {
+      "id": "p234",
+      "text": "There’s always something stronger."
+    },
+    {
+      "id": "p235",
+      "text": "Here, in the orphanage, stronger often meant smarter, or sneakier, or simply more stubborn than the world expected."
+    },
+    {
+      "id": "p236",
+      "text": "Kael looked at Lyra, then at Tarin. “So what’s the plan?”"
+    },
+    {
+      "id": "p237",
+      "text": "Lyra’s expression sharpened into immediate satisfaction. Tarin straightened like a boy about to sprint into disaster."
+    },
+    {
+      "id": "p238",
+      "text": "And just like that, the evening had something warm and conspiratorial to hold onto."
+    }
+  ]
+}
