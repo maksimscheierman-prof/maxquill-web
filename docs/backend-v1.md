@@ -8,7 +8,7 @@ The backend transports, validates, queues, and reports status. It never changes 
 
 ## Cloudflare layout
 
-The reader remains static. Cloudflare Pages Functions handle only `/api/*`, with D1 available as `env.DB`. The migrations create `review_jobs`, its state constraint, draft-scoped uniqueness, and queue index. Small owner and result packages are stored as JSON text. `POST /api/reviews` requires the exact draft fingerprint in `X-MaxQuill-Package-Fingerprint`.
+The reader remains static. Cloudflare Pages Functions handle only `/api/*`, with D1 available as `env.DB`. The migrations create `review_jobs`, its state constraint, draft-scoped uniqueness, and queue index, plus optional reader-feedback tables (`reader_invites`, `reader_reviewers`, `reader_comments`). Small owner and result packages are stored as JSON text. `POST /api/reviews` requires the exact draft fingerprint in `X-MaxQuill-Package-Fingerprint`.
 
 The committed `wrangler.example.jsonc` is deliberately inactive. First download/compare the live Pages project configuration, then copy the example to ignored `wrangler.jsonc` and insert the real D1 ID. This prevents a placeholder ID from breaking the existing Git deployment.
 
@@ -22,6 +22,22 @@ The committed `wrangler.example.jsonc` is deliberately inactive. First download/
 - `POST /api/jobs/:id/result` — worker; validates a newer `REVIEW_READY_PACKAGE`. From `PROCESSING` this stores the package and changes the job to `REVISION_READY`. From `FAILED` this is allowed only when `error_code` is a result-delivery validation failure (`HTTP_400`, `INVALID_INPUT`, or `INVALID_RESULT_PACKAGE`); it does not start a second revision. An identical package against `REVISION_READY` is idempotent; a different package is rejected.
 - `GET /api/jobs/:id/result` — verified owner; returns the exact stored `REVIEW_READY_PACKAGE` only after `REVISION_READY`. Earlier and failed states return `409`; corrupt or identity-mismatched stored data fails closed.
 - `POST /api/jobs/:id/fail` — claiming worker; changes `CLAIMED` or `PROCESSING` to `FAILED` with safe error data.
+
+### Reader feedback (parallel to OWNER_REVIEW)
+
+Friend invites reuse package fingerprints and selection offsets. They never queue revision jobs or mutate owner reviews.
+
+- `POST /api/invites` / `GET /api/invites?bookId=` — verified owner; create or list invites.
+- `GET /api/invites/overview?bookId=` — verified owner; per-chapter reader comment stats.
+- `GET /api/invites/comments?...` — verified owner; all comments for one draft fingerprint.
+- `GET /api/invites/:token` — public; invite metadata + package URL for an active invite.
+- `POST /api/invites/:token/join` — public; display name → reviewer session token.
+- `GET|POST /api/reader/comments` — reader session Bearer; list or add fingerprint-bound comments.
+- `POST /api/reader/finish` — reader session Bearer; mark reviewer finished.
+- `POST /api/reader-comments/:id/resolve` — verified owner; resolve one reader comment.
+- `/review/invite/:token` — redirects to `invite.html?token=...`.
+
+Owner UI: `owner-feedback.html`. Reader UI: `invite.html`.
 
 The backend stores the REVIEW_READY draft fingerprint separately from its own SHA-256 fingerprint of the canonical OWNER_REVIEW JSON. An identical review for the same draft returns the existing job. A different review for that exact draft returns `409`. A different draft fingerprint can create a separate job even when book, chapter, and version match. Existing pre-migration jobs remain preserved under isolated legacy identities.
 

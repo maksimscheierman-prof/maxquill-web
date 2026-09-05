@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en" data-reader-theme="dark" data-font-size="medium" data-text-width="normal" data-line-height="normal" data-reader-mode="review">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Leave private reader feedback on a MaxQuill chapter invite.">
+  <meta name="theme-color" content="#0c0b0a">
+  <title>Reader Invite | MaxQuill</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="reader-page invite-page">
+  <header class="reader-header">
+    <a class="wordmark" href="index.html" aria-label="MaxQuill library">MAXQUILL</a>
+    <div class="reader-controls">
+      <span class="invite-badge" id="invite-badge">Reader feedback</span>
+      <button class="settings-toggle" type="button" aria-expanded="false" aria-controls="reader-settings">Text</button>
+    </div>
+  </header>
+
+  <aside class="reader-settings" id="reader-settings" aria-label="Reading settings" hidden>
+    <div class="setting-group"><span id="theme-label">Theme</span><div class="segmented" role="group" aria-labelledby="theme-label"><button type="button" data-setting="theme" data-value="dark">Dark</button><button type="button" data-setting="theme" data-value="light">Light</button><button type="button" data-setting="theme" data-value="sepia">Sepia</button></div></div>
+    <div class="setting-group"><span id="font-label">Font size</span><div class="segmented" role="group" aria-labelledby="font-label"><button type="button" data-setting="fontSize" data-value="small">Small</button><button type="button" data-setting="fontSize" data-value="medium">Medium</button><button type="button" data-setting="fontSize" data-value="large">Large</button><button type="button" data-setting="fontSize" data-value="xlarge">Extra large</button></div></div>
+  </aside>
+
+  <section class="invite-gate" id="invite-gate" hidden>
+    <p class="eyebrow">Reader invite</p>
+    <h1 id="invite-title">Chapter feedback</h1>
+    <p class="invite-copy">Read the chapter, mark any passage that stands out, and leave a short comment. This is reader feedback only — it does not submit an owner revision.</p>
+    <label for="display-name">Your name</label>
+    <input id="display-name" name="displayName" maxlength="64" autocomplete="nickname" placeholder="Anna">
+    <p class="form-message" id="gate-message" role="alert" hidden></p>
+    <button class="primary-button" type="button" id="start-invite">Start reading</button>
+  </section>
+
+  <div class="review-bar" id="review-bar" hidden>
+    <div><span id="review-chapter-status">Reader feedback</span><strong id="open-note-count">Comments: 0</strong></div>
+    <div>
+      <button type="button" id="open-review-panel">Your comments</button>
+      <button class="save-button" type="button" id="finish-review">Finish review</button>
+    </div>
+  </div>
+
+  <div class="selection-actions" id="selection-actions" hidden>
+    <span class="selection-preview" id="selection-preview"></span>
+    <button type="button" data-selection-action="comment">Comment</button>
+  </div>
+  <p class="selection-message" id="selection-message" role="status" hidden></p>
+
+  <main id="reader-content" aria-live="polite"><p class="loading reader-loading">Opening invite&hellip;</p></main>
+
+  <dialog class="annotation-dialog" id="annotation-dialog" aria-labelledby="annotation-title">
+    <form method="dialog" id="annotation-form">
+      <div class="panel-heading"><div><p class="eyebrow">Reader comment</p><h2 id="annotation-title">Add comment</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close">&times;</button></div>
+      <blockquote id="annotation-quote"></blockquote>
+      <label for="annotation-type">Category <span>(optional)</span></label>
+      <select id="annotation-type" name="category">
+        <option value="">General</option>
+        <option value="Confusing">Confusing</option>
+        <option value="Pacing">Pacing</option>
+        <option value="Dialogue">Dialogue</option>
+        <option value="Character">Character</option>
+        <option value="Continuity">Continuity</option>
+      </select>
+      <label for="annotation-comment">Comment</label>
+      <textarea id="annotation-comment" name="comment" rows="5" placeholder="What stood out?" required></textarea>
+      <p class="form-message" id="annotation-message" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="save-button" type="submit">Save comment</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="review-panel" id="review-panel" aria-labelledby="review-panel-title">
+    <div class="panel-heading"><div><p class="eyebrow">Your feedback</p><h2 id="review-panel-title">Comments</h2></div><button class="icon-button" type="button" data-close-panel aria-label="Close">&times;</button></div>
+    <div id="review-summary"></div>
+    <p class="form-message" id="review-message" role="alert" hidden></p>
+    <ol class="review-note-list" id="review-note-list"></ol>
+    <div class="review-panel-actions"><button class="save-button" type="button" id="finish-review-panel">Finish review</button></div>
+  </dialog>
+
+  <script src="contract.js" defer></script>
+  <script src="selection-logic.js" defer></script>
+  <script src="review-api.js" defer></script>
+  <script src="reader-feedback-api.js" defer></script>
+  <script src="invite.js" defer></script>
+</body>
+</html>

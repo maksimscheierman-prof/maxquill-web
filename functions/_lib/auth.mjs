@@ -31,3 +31,13 @@ export async function requireWorker(request, env) {
   const [left, right] = await Promise.all([digest(expected), digest(supplied)]); let difference = 0; for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
   if (difference !== 0) throw new ApiError(403, "FORBIDDEN", "Worker authentication failed.");
 }
+
+export function readerSessionToken(request) {
+  return (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+}
+
+export async function requireReaderSession(request, readerService) {
+  const token = readerSessionToken(request);
+  if (!token) throw new ApiError(401, "UNAUTHORIZED", "Reader session is required.");
+  return readerService.resolveSession(token);
+}

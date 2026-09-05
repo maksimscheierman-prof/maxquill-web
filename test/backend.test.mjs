@@ -86,7 +86,11 @@ test("result GET rejects an unauthenticated browser before reading D1", async ()
 test("all Pages Function route modules load", async () => {
   const modules = await Promise.all([
     import("../functions/api/reviews.js"), import("../functions/api/jobs/next.js"), import("../functions/api/jobs/[id].js"),
-    import("../functions/api/jobs/[id]/claim.js"), import("../functions/api/jobs/[id]/processing.js"), import("../functions/api/jobs/[id]/result.js"), import("../functions/api/jobs/[id]/fail.js")
+    import("../functions/api/jobs/[id]/claim.js"), import("../functions/api/jobs/[id]/processing.js"), import("../functions/api/jobs/[id]/result.js"), import("../functions/api/jobs/[id]/fail.js"),
+    import("../functions/api/invites.js"), import("../functions/api/invites/overview.js"), import("../functions/api/invites/comments.js"),
+    import("../functions/api/invites/[token].js"), import("../functions/api/invites/[token]/join.js"),
+    import("../functions/api/reader/comments.js"), import("../functions/api/reader/finish.js"),
+    import("../functions/api/reader-comments/[id]/resolve.js"), import("../functions/review/invite/[token].js")
   ]);
   modules.forEach((module) => assert.equal(typeof module.onRequest, "function"));
 });

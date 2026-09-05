@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Owner overview for MaxQuill reader feedback invites.">
+  <meta name="theme-color" content="#0c0b0a">
+  <title>Reader Feedback | MaxQuill</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="owner-feedback" class="owner-feedback-page">
+  <header class="site-header shell">
+    <a class="wordmark" href="index.html">MAXQUILL</a>
+    <nav class="owner-nav">
+      <a class="quiet-link" href="book.html">Book</a>
+      <a class="quiet-link" href="index.html">Library</a>
+    </nav>
+  </header>
+
+  <main class="shell page-main" id="owner-feedback-root">
+    <section class="intro feedback-intro">
+      <p class="eyebrow">Owner · Reader feedback</p>
+      <h1 id="book-heading">Reader Feedback</h1>
+      <p>Create invite links for friends, then read every comment inline against the chapter text.</p>
+    </section>
+
+    <section class="feedback-section" aria-labelledby="invite-heading">
+      <div class="section-heading">
+        <h2 id="invite-heading">Create Reader Invite</h2>
+      </div>
+      <form class="invite-create-form" id="invite-form">
+        <label for="invite-chapter">Chapter package</label>
+        <select id="invite-chapter" name="chapter" required></select>
+        <p class="form-message" id="invite-message" role="alert" hidden></p>
+        <button class="primary-button" type="submit">Create Reader Invite</button>
+      </form>
+      <div class="invite-link-box" id="invite-link-box" hidden>
+        <p class="eyebrow">Invite link</p>
+        <code id="invite-link-text"></code>
+        <button type="button" class="copy-link-button" id="copy-invite-link">Copy Link</button>
+      </div>
+    </section>
+
+    <section class="feedback-section" aria-labelledby="overview-heading">
+      <div class="section-heading">
+        <h2 id="overview-heading">Reader Feedback</h2>
+        <span id="overview-meta">Loading…</span>
+      </div>
+      <ol class="feedback-chapter-list" id="feedback-chapter-list"></ol>
+    </section>
+
+    <section class="feedback-section feedback-inline" id="inline-section" hidden aria-labelledby="inline-heading">
+      <div class="section-heading">
+        <h2 id="inline-heading">Chapter feedback</h2>
+        <button type="button" class="quiet-link" id="close-inline">Close</button>
+      </div>
+      <div class="feedback-filters">
+        <label for="reader-filter">Readers</label>
+        <select id="reader-filter">
+          <option value="">All readers</option>
+        </select>
+        <label for="status-filter">Status</label>
+        <select id="status-filter">
+          <option value="">All comments</option>
+          <option value="open">Open</option>
+        </select>
+      </div>
+      <article class="chapter-article feedback-article" aria-labelledby="inline-chapter-title">
+        <header class="chapter-heading">
+          <p class="eyebrow" id="inline-chapter-eyebrow">Chapter</p>
+          <h1 id="inline-chapter-title"></h1>
+          <p class="chapter-review-status" id="inline-chapter-meta"></p>
+        </header>
+        <div class="chapter-body" id="inline-chapter-body"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer shell">&copy; 2026 MaxQuill · Owner feedback</footer>
+  <script src="review-api.js" defer></script>
+  <script src="reader-feedback-api.js" defer></script>
+  <script src="owner-feedback.js" defer></script>
+</body>
+</html>

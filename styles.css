@@ -23,3 +23,45 @@
 .submit-toast{position:fixed;z-index:10;right:max(1rem,env(safe-area-inset-right));bottom:calc(1rem + env(safe-area-inset-bottom));display:grid;gap:.1rem;min-width:min(20rem,calc(100% - 2rem));padding:.85rem 1rem;border:1px solid var(--accent);background:var(--raised);box-shadow:0 .7rem 2rem rgba(0,0,0,.4)}
 .submit-toast[hidden]{display:none}.submit-toast strong{color:var(--reader-text)}.submit-toast span{color:var(--reader-muted);font-size:.8rem}
 @media(max-width:30rem){.review-panel-actions{display:grid;grid-template-columns:1fr;margin-inline:-1.25rem;padding:1rem 1.25rem calc(1rem + env(safe-area-inset-bottom))}.review-panel-actions .submit-button{grid-row:1}.review-panel-actions button{width:100%}}
+
+/* Invite reader + owner feedback */
+.invite-badge{color:var(--reader-muted);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+.invite-gate{width:min(100% - 3rem,28rem);margin:4rem auto;padding:2rem;border:1px solid var(--line);background:var(--raised)}
+.invite-gate h1{margin:0 0 1rem;font-size:clamp(2rem,5vw,2.8rem)}
+.invite-copy{color:var(--reader-muted);margin:0 0 1.5rem}
+.invite-gate label{display:block;margin:0 0 .35rem;color:var(--reader-muted);font-size:.76rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.invite-gate input{width:100%;min-height:3rem;margin-bottom:1rem;padding:.65rem .75rem;border:1px solid var(--line);background:var(--reader-bg);color:var(--reader-text);font:inherit}
+.invite-gate .primary-button{margin-top:.5rem;width:100%}
+.form-message{margin:.75rem 0;color:#d99a91;font-size:.85rem}
+.form-message[hidden]{display:none}
+.owner-feedback-page .feedback-intro{max-width:42rem}
+.owner-nav{display:flex;gap:1rem}
+.feedback-section{margin-top:clamp(3rem,8vw,5rem)}
+.invite-create-form{display:grid;gap:.75rem;max-width:36rem}
+.invite-create-form select{min-height:3rem;padding:.55rem;border:1px solid var(--line);background:var(--surface);color:var(--text);font:inherit}
+.invite-link-box{margin-top:1.5rem;padding:1.25rem;border:1px solid var(--line);background:var(--surface);display:grid;gap:.75rem;max-width:42rem}
+.invite-link-box code{overflow-wrap:anywhere;font-size:.85rem;color:var(--accent)}
+.copy-link-button{width:fit-content;min-height:2.75rem;padding:.45rem .9rem;border:1px solid var(--line);background:transparent;color:inherit;cursor:pointer}
+.feedback-chapter-list{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.feedback-chapter-item{display:flex;gap:1rem;align-items:center;justify-content:space-between;padding:1.1rem 0;border-bottom:1px solid var(--line)}
+.feedback-chapter-item strong{display:block;font-family:var(--serif);font-size:1.35rem;font-weight:400}
+.feedback-chapter-item .muted{margin:.35rem 0 0;color:var(--muted);font-size:.9rem}
+.feedback-chapter-item.is-empty{opacity:.72}
+.feedback-chapter-item .primary-button{margin-top:0}
+.feedback-filters{display:flex;flex-wrap:wrap;gap:1rem;align-items:end;margin:1.5rem 0 2rem}
+.feedback-filters label{display:grid;gap:.35rem;color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.feedback-filters select{min-height:2.75rem;min-width:12rem;padding:.45rem .6rem;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.feedback-article{margin-top:1rem}
+.reader-feedback-card{margin:0 0 1.75rem;padding:1rem 1.1rem;border:1px solid var(--line);background:rgba(201,169,110,.07)}
+.reader-feedback-card header{display:grid;gap:.35rem;margin-bottom:.85rem}
+.reader-feedback-card q{font-family:var(--serif);color:var(--muted)}
+.reader-feedback-list{margin:0;padding:0;list-style:none}
+.reader-feedback-list li{padding:.85rem 0;border-top:1px solid var(--line)}
+.reader-feedback-list li.is-resolved{opacity:.65}
+.reader-feedback-meta{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.35rem}
+.reader-feedback-meta strong{font-size:.95rem}
+.reader-feedback-meta span{color:var(--muted);font-size:.75rem;letter-spacing:.04em;text-transform:uppercase}
+.reader-feedback-list blockquote{margin:0;color:var(--text);font-family:var(--serif)}
+.reader-feedback-actions{margin-top:.65rem}
+.reader-feedback-actions button{min-height:2.5rem;padding:.35rem .7rem;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+@media(max-width:40rem){.feedback-chapter-item{flex-direction:column;align-items:flex-start}}
