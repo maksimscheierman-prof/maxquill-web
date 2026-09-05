@@ -5,7 +5,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const VIEW_MODES = new Set(["changes", "full"]);
+  const VIEW_MODES = new Set(["notes", "changes", "full"]);
 
   function cloneReviewReady(pkg) {
     if (!pkg || typeof pkg !== "object") return null;
@@ -91,6 +91,54 @@
     };
   }
 
+  function setViewMode(session, viewMode) {
+    const mode = VIEW_MODES.has(viewMode) ? viewMode : "changes";
+    return { ...session, viewMode: mode };
+  }
+
+  function reviewNotesLabel(count) {
+    return `Review Notes (${Number(count) || 0})`;
+  }
+
+  function changesTabLabel(count) {
+    return `Changes (${Number(count) || 0})`;
+  }
+
+  function versionRelationLabel(beforeVersion, afterVersion) {
+    if (!Number.isInteger(beforeVersion) || !Number.isInteger(afterVersion)) return "";
+    return `Version ${beforeVersion} → Version ${afterVersion}`;
+  }
+
+  function changeCardCount(model) {
+    return (model?.changes?.length || 0) + (model?.unmatchedReviewItems?.length || 0);
+  }
+
+  function originalNoteCount(ownerReview) {
+    return Array.isArray(ownerReview?.annotations) ? ownerReview.annotations.length : 0;
+  }
+
+  function revisionDisplayState({ viewMode, beforePackage, afterPackage, ownerReview, afterReview }) {
+    const mode = VIEW_MODES.has(viewMode) ? viewMode : "changes";
+    if (mode === "notes") {
+      return {
+        viewMode: "notes",
+        package: beforePackage || null,
+        annotations: Array.isArray(ownerReview?.annotations) ? ownerReview.annotations : [],
+        readOnly: true,
+        writesTo: "none",
+        chapterVersion: beforePackage?.chapterVersion ?? null
+      };
+    }
+    return {
+      viewMode: mode,
+      package: afterPackage || null,
+      annotations: Array.isArray(afterReview?.annotations) ? afterReview.annotations : [],
+      readOnly: false,
+      writesTo: "afterReview",
+      chapterVersion: afterPackage?.chapterVersion ?? null
+    };
+  }
+
   function applyAccepted(model, acceptedChangeIds) {
     const accepted = new Set(acceptedChangeIds || []);
     const changes = (model?.changes || []).map((change) => ({ ...change, accepted: accepted.has(change.id) }));
@@ -115,14 +163,41 @@
     return { ...session, acceptedChangeIds: [...new Set(changeIds.filter(Boolean))] };
   }
 
-  function revisionViewState({ hasRevisionPair, viewMode, jobStatus }) {
-    const changes = hasRevisionPair && viewMode === "changes";
+  function revisionViewState({
+    hasRevisionPair,
+    viewMode,
+    jobStatus,
+    originalNoteCount = 0,
+    changeCount = 0,
+    currentNoteCount = 0,
+    beforeVersion,
+    afterVersion
+  }) {
+    const pair = Boolean(hasRevisionPair);
+    const mode = pair && VIEW_MODES.has(viewMode) ? viewMode : null;
+    const readyOnSource = jobStatus === "REVISION_READY" && !pair;
+    let noteCountLabel = reviewNotesLabel(currentNoteCount);
+    if (pair && mode === "notes") noteCountLabel = reviewNotesLabel(originalNoteCount);
+    if (pair && mode === "changes") noteCountLabel = changesTabLabel(changeCount);
     return {
-      openRevisedHidden: jobStatus !== "REVISION_READY",
+      openRevisedHidden: !readyOnSource,
       openRevisedLabel: "Review Changes",
-      toggleHidden: !hasRevisionPair,
-      toggleLabel: changes ? "View Full Chapter" : "Review Changes",
-      showChanges: Boolean(changes)
+      tabsHidden: !pair,
+      notesLabel: reviewNotesLabel(originalNoteCount),
+      changesLabel: changesTabLabel(changeCount),
+      notesPressed: mode === "notes",
+      changesPressed: mode === "changes",
+      fullPressed: mode === "full",
+      showChanges: mode === "changes",
+      showOriginalNotes: mode === "notes",
+      showFullChapter: mode === "full" || !pair,
+      toggleHidden: !pair,
+      toggleLabel: "View Full Chapter",
+      togglePressed: mode === "full",
+      versionLabel: pair ? versionRelationLabel(beforeVersion, afterVersion) : "",
+      modeSwitchLabel: "Review",
+      noteCountLabel,
+      countHidden: pair
     };
   }
 
@@ -151,6 +226,13 @@
     normalizeSourceRecord,
     defaultSession,
     normalizeSession,
+    setViewMode,
+    reviewNotesLabel,
+    changesTabLabel,
+    versionRelationLabel,
+    changeCardCount,
+    originalNoteCount,
+    revisionDisplayState,
     applyAccepted,
     toggleAccepted,
     acceptAll,

@@ -59,18 +59,28 @@ test("existing Submit/Queue/Revision flow is not broken", () => {
   assert.equal(reviewApi.STATUS_LABELS.PROCESSING, "Processing");
 });
 
-test("reader exposes a touch-safe Review Changes CTA and full-chapter fallback", () => {
+test("reader exposes revision tabs, Review Notes labeling, and full-chapter fallback", () => {
   const html = fs.readFileSync(require.resolve("../reader.html"), "utf8"), script = fs.readFileSync(require.resolve("../reader.js"), "utf8"), css = fs.readFileSync(require.resolve("../styles.css"), "utf8");
   assert.match(html, /id="open-revised-version" hidden>Review Changes/);
   assert.match(html, /id="toggle-revision-view" hidden>View Full Chapter/);
+  assert.match(html, /id="tab-review-notes"[^>]*>Review Notes \(0\)/);
+  assert.match(html, /id="tab-revision-changes"[^>]*>Changes \(0\)/);
+  assert.match(html, /id="open-note-count">Review Notes \(0\)/);
+  assert.match(html, /id="open-review-panel">Review Notes/);
+  assert.doesNotMatch(html, /Read Review/);
   assert.match(html, /src="revision-diff.js"/);
   assert.match(html, /src="revision-review.js"/);
   assert.match(script, /MaxQuillRevisionReview\.revisionViewState/);
+  assert.match(script, /setRevisionView\("notes"\)/);
+  assert.match(script, /setRevisionView\("changes"\)/);
+  assert.match(script, /setRevisionView\("full"\)/);
+  assert.match(script, /showingOriginalNotes\(\)/);
+  assert.doesNotMatch(script, /Review \(\$\{review\.annotations\.length\}/);
   assert.match(script, /getReviewResult\(reviewJob\.jobId, reviewIdentity\)/);
   assert.match(script, /version=\$\{result\.chapterVersion\}&resultJob=/);
   assert.match(script, /persistRevisionSource\(reviewJob\.jobId\)/);
   assert.match(script, /attachRevisionContext\(resultJob, sourcePackage\)/);
-  assert.match(script, /toggleRevisionView/);
   assert.match(css, /\.review-bar \.open-revision-button\{min-height:3\.15rem/);
+  assert.match(css, /\.review-tabs\{/);
   assert.match(css, /\.revision-change\{/);
 });

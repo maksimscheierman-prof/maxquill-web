@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict"), test = require("node:test");
 const diff = require("../revision-diff.js");
 const revision = require("../revision-review.js");
+const reviewApi = require("../review-api.js");
 
 function paragraph(id, text) { return { id, text }; }
 function pkg(version, content, title = "Chapter") {
@@ -158,12 +159,16 @@ test("full chapter fallback is the non-changes view", () => {
   assert.equal(ready.openRevisedHidden, false);
   assert.equal(ready.openRevisedLabel, "Review Changes");
   assert.equal(ready.toggleHidden, true);
+  assert.equal(ready.tabsHidden, true);
   const reviewing = revision.revisionViewState({ hasRevisionPair: true, viewMode: "changes", jobStatus: null });
   assert.equal(reviewing.showChanges, true);
   assert.equal(reviewing.toggleLabel, "View Full Chapter");
+  assert.equal(reviewing.togglePressed, false);
   const full = revision.revisionViewState({ hasRevisionPair: true, viewMode: "full", jobStatus: null });
   assert.equal(full.showChanges, false);
-  assert.equal(full.toggleLabel, "Review Changes");
+  assert.equal(full.showFullChapter, true);
+  assert.equal(full.toggleLabel, "View Full Chapter");
+  assert.equal(full.togglePressed, true);
 });
 
 test("source record isolation refuses a different job or chapter identity", () => {
@@ -184,4 +189,132 @@ test("accept tracking is local session state and does not alter the model ids", 
   assert.equal(accepted.changes[0].accepted, true);
   assert.equal(accepted.summary.accepted, 1);
   assert.equal(model.changes[0].accepted, false);
+});
+
+test("sixteen owner annotations render as Review Notes, not sixteen reviews", () => {
+  assert.equal(revision.reviewNotesLabel(16), "Review Notes (16)");
+  assert.doesNotMatch(revision.reviewNotesLabel(16), /16 reviews/i);
+  const view = revision.revisionViewState({ hasRevisionPair: true, viewMode: "changes", originalNoteCount: 16, changeCount: 7, currentNoteCount: 0, beforeVersion: 1, afterVersion: 2 });
+  assert.equal(view.notesLabel, "Review Notes (16)");
+  assert.equal(view.changesLabel, "Changes (7)");
+  assert.equal(view.modeSwitchLabel, "Review");
+  assert.doesNotMatch(view.notesLabel, /reviews/i);
+  assert.equal(view.versionLabel, "Version 1 → Version 2");
+});
+
+test("Changes tab count reflects diff cards including unmatched review items", () => {
+  const before = pkg(1, [paragraph("p001", "The lantern was dim."), paragraph("p002", "Unchanged close.")]);
+  const after = pkg(2, [paragraph("p001", "The lantern burned low."), paragraph("p002", "Unchanged close.")]);
+  const ownerReview = { annotations: [note("a1", "p001", "The lantern was dim.", "Please rewrite."), note("a2", "p002", "Unchanged close.", "Still looks off.")] };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  assert.equal(model.changes.length, 1);
+  assert.equal(model.unmatchedReviewItems.length, 1);
+  assert.equal(revision.changeCardCount(model), 2);
+  assert.equal(revision.revisionViewState({ hasRevisionPair: true, viewMode: "changes", changeCount: revision.changeCardCount(model) }).changesLabel, "Changes (2)");
+});
+
+test("REVISION_READY revised package defaults to Changes, not notes or full chapter", () => {
+  const source = { bookId: "demo-book", chapterId: "chapter_0001", packageFingerprint: "src" };
+  const result = { bookId: "demo-book", chapterId: "chapter_0001", packageFingerprint: "dst" };
+  const session = revision.normalizeSession(null, source, result);
+  assert.equal(session.viewMode, "changes");
+  const view = revision.revisionViewState({ hasRevisionPair: true, viewMode: session.viewMode, jobStatus: "REVISION_READY", originalNoteCount: 16, changeCount: 4, beforeVersion: 1, afterVersion: 2 });
+  assert.equal(view.showChanges, true);
+  assert.equal(view.showOriginalNotes, false);
+  assert.equal(view.showFullChapter, false);
+  assert.equal(view.changesPressed, true);
+  assert.equal(view.notesPressed, false);
+  assert.equal(view.togglePressed, false);
+  assert.equal(view.toggleLabel, "View Full Chapter");
+  assert.equal(view.openRevisedHidden, true);
+  const sourcePage = revision.revisionViewState({ hasRevisionPair: false, viewMode: "changes", jobStatus: "REVISION_READY", currentNoteCount: 16 });
+  assert.equal(sourcePage.showChanges, false);
+  assert.equal(sourcePage.tabsHidden, true);
+  assert.equal(sourcePage.openRevisedHidden, false);
+  assert.equal(sourcePage.noteCountLabel, "Review Notes (16)");
+});
+
+test("Review Notes tab opens original submitted review, not the revised package", () => {
+  const before = pkg(1, [paragraph("p001", "Old.")]);
+  const after = pkg(2, [paragraph("p001", "New.")]);
+  const ownerReview = { annotations: Array.from({ length: 16 }, (_, index) => note(`n${index}`, "p001", "Old.", `Note ${index}`)) };
+  const afterReview = { annotations: [note("v2", "p001", "New.", "Fresh comment")] };
+  const display = revision.revisionDisplayState({ viewMode: "notes", beforePackage: before, afterPackage: after, ownerReview, afterReview });
+  assert.equal(display.package.chapterVersion, 1);
+  assert.equal(display.annotations.length, 16);
+  assert.equal(display.readOnly, true);
+  assert.equal(display.writesTo, "none");
+  assert.equal(display.annotations[0].id, "n0");
+  assert.notEqual(display.annotations, afterReview.annotations);
+});
+
+test("View Full Chapter opens the revised chapter", () => {
+  const before = pkg(1, [paragraph("p001", "Old.")]);
+  const after = pkg(2, [paragraph("p001", "New.")]);
+  const display = revision.revisionDisplayState({ viewMode: "full", beforePackage: before, afterPackage: after, ownerReview: { annotations: [note("n1", "p001", "Old.", "x")] }, afterReview: { annotations: [] } });
+  assert.equal(display.package.chapterVersion, 2);
+  assert.equal(display.package, after);
+  assert.equal(display.readOnly, false);
+  assert.equal(display.writesTo, "afterReview");
+  const view = revision.revisionViewState({ hasRevisionPair: true, viewMode: "full", beforeVersion: 1, afterVersion: 2 });
+  assert.equal(view.showFullChapter, true);
+  assert.equal(view.showChanges, false);
+  assert.equal(view.togglePressed, true);
+  assert.equal(view.toggleLabel, "View Full Chapter");
+});
+
+test("switching tabs does not mix package, review, or accept state", () => {
+  const source = { bookId: "demo-book", chapterId: "chapter_0001", packageFingerprint: "src" };
+  const result = { bookId: "demo-book", chapterId: "chapter_0001", packageFingerprint: "dst" };
+  const session = revision.normalizeSession({ sourceFingerprint: "src", resultFingerprint: "dst", viewMode: "changes", acceptedChangeIds: ["change-1"] }, source, result);
+  const notes = revision.setViewMode(session, "notes");
+  const full = revision.setViewMode(notes, "full");
+  const back = revision.setViewMode(full, "changes");
+  assert.equal(notes.sourceFingerprint, "src");
+  assert.equal(notes.resultFingerprint, "dst");
+  assert.deepEqual(notes.acceptedChangeIds, ["change-1"]);
+  assert.equal(full.viewMode, "full");
+  assert.deepEqual(full.acceptedChangeIds, ["change-1"]);
+  assert.equal(back.viewMode, "changes");
+  const before = pkg(1, [paragraph("p001", "Old.")]);
+  const after = pkg(2, [paragraph("p001", "New.")]);
+  const ownerReview = { annotations: [note("v1", "p001", "Old.", "Original")] };
+  const afterReview = { annotations: [note("v2", "p001", "New.", "New flag")] };
+  const notesDisplay = revision.revisionDisplayState({ viewMode: "notes", beforePackage: before, afterPackage: after, ownerReview, afterReview });
+  const changeDisplay = revision.revisionDisplayState({ viewMode: "changes", beforePackage: before, afterPackage: after, ownerReview, afterReview });
+  assert.equal(notesDisplay.writesTo, "none");
+  assert.equal(notesDisplay.annotations[0].id, "v1");
+  assert.equal(changeDisplay.writesTo, "afterReview");
+  assert.equal(changeDisplay.annotations[0].id, "v2");
+  assert.notEqual(
+    reviewApi.reviewStorageKey({ bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 1, packageFingerprint: "src" }),
+    reviewApi.reviewStorageKey({ bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 2, packageFingerprint: "dst" })
+  );
+  assert.notEqual(revision.sessionStorageKey({ bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 2, packageFingerprint: "dst" }), reviewApi.reviewStorageKey({ bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 2, packageFingerprint: "dst" }));
+});
+
+test("old package does not inherit tab or diff state from a new package", () => {
+  const sourceA = { bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 1, packageFingerprint: "src-a" };
+  const resultA = { bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 2, packageFingerprint: "dst-a" };
+  const sourceB = { bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 2, packageFingerprint: "src-b" };
+  const resultB = { bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 3, packageFingerprint: "dst-b" };
+  const storedNew = { sourceFingerprint: "src-b", resultFingerprint: "dst-b", viewMode: "notes", acceptedChangeIds: ["new-change"] };
+  const oldRestored = revision.normalizeSession(storedNew, sourceA, resultA);
+  const newRestored = revision.normalizeSession(storedNew, sourceB, resultB);
+  assert.equal(oldRestored.viewMode, "changes");
+  assert.deepEqual(oldRestored.acceptedChangeIds, []);
+  assert.equal(newRestored.viewMode, "notes");
+  assert.deepEqual(newRestored.acceptedChangeIds, ["new-change"]);
+  assert.notEqual(revision.sessionStorageKey(resultA), revision.sessionStorageKey(resultB));
+});
+
+test("reload of same revised package restores selected tab and accepts", () => {
+  const source = { bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 1, packageFingerprint: "src" };
+  const result = { bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 2, packageFingerprint: "dst" };
+  const stored = { sourceFingerprint: "src", resultFingerprint: "dst", viewMode: "notes", acceptedChangeIds: ["changed:p001:p001:0:0"] };
+  const session = revision.normalizeSession(stored, source, result);
+  assert.equal(session.viewMode, "notes");
+  assert.deepEqual(session.acceptedChangeIds, ["changed:p001:p001:0:0"]);
+  assert.equal(revision.normalizeSession({ ...stored, viewMode: "changes" }, source, result).viewMode, "changes");
+  assert.equal(revision.normalizeSession({ ...stored, viewMode: "full" }, source, result).viewMode, "full");
 });
