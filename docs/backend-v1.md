@@ -19,7 +19,7 @@ The committed `wrangler.example.jsonc` is deliberately inactive. First download/
 - `GET /api/jobs/next` — worker; returns the oldest queued job or `{"job":null}`.
 - `POST /api/jobs/:id/claim` — worker; atomically changes `QUEUED` to `CLAIMED`.
 - `POST /api/jobs/:id/processing` — claiming worker; changes `CLAIMED` to `PROCESSING`.
-- `POST /api/jobs/:id/result` — worker; validates a newer `REVIEW_READY_PACKAGE`. From `PROCESSING` this stores the package and changes the job to `REVISION_READY`. From `FAILED` this is allowed only when `error_code` is a result-delivery validation failure (`HTTP_400`, `INVALID_INPUT`, or `INVALID_RESULT_PACKAGE`); it does not start a second revision. An identical package against `REVISION_READY` is idempotent; a different package is rejected.
+- `POST /api/jobs/:id/result` — worker; validates a newer `REVIEW_READY_PACKAGE`. From `PROCESSING` this stores the package and changes the job to `REVISION_READY`. From `FAILED` this is allowed when `error_code` is a result-delivery validation failure (`HTTP_400`, `INVALID_INPUT`, or `INVALID_RESULT_PACKAGE`) or `ENGINE_COMMAND_FAILED` after a later successful local engine run (`--recover-result`); it does not start a second revision. An identical package against `REVISION_READY` is idempotent; a different package is rejected.
 - `GET /api/jobs/:id/result` — verified owner; returns the exact stored `REVIEW_READY_PACKAGE` only after `REVISION_READY`. Earlier and failed states return `409`; corrupt or identity-mismatched stored data fails closed.
 - `POST /api/jobs/:id/fail` — claiming worker; changes `CLAIMED` or `PROCESSING` to `FAILED` with safe error data.
 

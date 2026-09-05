@@ -47,16 +47,30 @@ test("finish review shows a clean submit CTA without a not-submitted status", ()
   assert.equal(state.completion, "Review complete"); assert.equal(state.submittedHidden, true); assert.equal(state.submitted, ""); assert.equal(state.queueHidden, true); assert.equal(state.submitHidden, false); assert.equal(state.submitDisabled, false); assert.equal(state.submitText, "Submit for Revision");
 });
 
-test("queued review shows the concise submitted reader status", () => {
+test("existing Submit/Queue/Revision flow is not broken", () => {
   const state = flow.reviewUiState({ completed: true }, { status: "QUEUED" }, false, reviewApi.STATUS_LABELS);
-  assert.equal(state.submitted, "Submitted"); assert.equal(state.queue, "Queued"); assert.equal(state.readerStatus, "Submitted · Queued"); assert.equal(state.submitHidden, true);
+  assert.equal(state.submitText, "Submit for Revision");
+  assert.equal(state.queue, "Queued");
+  assert.equal(state.submitted, "Submitted");
+  assert.equal(state.readerStatus, "Submitted · Queued");
+  assert.equal(state.submitHidden, true);
+  assert.equal(reviewApi.STATUS_LABELS.REVISION_READY, "Revision ready");
+  assert.equal(reviewApi.STATUS_LABELS.FAILED, "Failed");
+  assert.equal(reviewApi.STATUS_LABELS.PROCESSING, "Processing");
 });
 
-test("reader exposes a touch-safe revised-version CTA only for result delivery", () => {
+test("reader exposes a touch-safe Review Changes CTA and full-chapter fallback", () => {
   const html = fs.readFileSync(require.resolve("../reader.html"), "utf8"), script = fs.readFileSync(require.resolve("../reader.js"), "utf8"), css = fs.readFileSync(require.resolve("../styles.css"), "utf8");
-  assert.match(html, /id="open-revised-version" hidden>Open revised version/);
-  assert.match(script, /openRevision\.hidden = reviewJob\?\.status !== "REVISION_READY"/);
+  assert.match(html, /id="open-revised-version" hidden>Review Changes/);
+  assert.match(html, /id="toggle-revision-view" hidden>View Full Chapter/);
+  assert.match(html, /src="revision-diff.js"/);
+  assert.match(html, /src="revision-review.js"/);
+  assert.match(script, /MaxQuillRevisionReview\.revisionViewState/);
   assert.match(script, /getReviewResult\(reviewJob\.jobId, reviewIdentity\)/);
   assert.match(script, /version=\$\{result\.chapterVersion\}&resultJob=/);
+  assert.match(script, /persistRevisionSource\(reviewJob\.jobId\)/);
+  assert.match(script, /attachRevisionContext\(resultJob, sourcePackage\)/);
+  assert.match(script, /toggleRevisionView/);
   assert.match(css, /\.review-bar \.open-revision-button\{min-height:3\.15rem/);
+  assert.match(css, /\.revision-change\{/);
 });

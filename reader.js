@@ -5,7 +5,7 @@
   const PREFS_KEY = "maxquill:reader-preferences";
   const MODE_KEY = "maxquill:reader-mode";
   const defaults = { theme: "dark", fontSize: "medium", textWidth: "normal", lineHeight: "normal" };
-  let book, chapter, sourcePackage, reviewIdentity, progress, review, reviewJob = null, pendingSelection = null, editingId = null, scrollTimer, selectionTimer, pollTimer, actionEngaged = false, submitting = false, companionManifest = null, companionState = null;
+  let book, chapter, sourcePackage, reviewIdentity, progress, review, reviewJob = null, pendingSelection = null, editingId = null, scrollTimer, selectionTimer, pollTimer, actionEngaged = false, submitting = false, companionManifest = null, companionState = null, revisionContext = null;
 
   function readStorage(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (error) { console.warn(`Could not read ${key}.`, error); return fallback; } }
   function writeStorage(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { console.warn(`Could not save ${key}.`, error); } }
@@ -16,6 +16,166 @@
   function packageUrl(bookId, number, version) { return `content/books/${encodeURIComponent(bookId)}/review/chapter_${String(number).padStart(4, "0")}_v${version}.json`; }
   function showMessage(selector, message) { const node = document.querySelector(selector); node.textContent = message; node.hidden = !message; }
   function hideSelectionActions(clearSelection = false) { document.querySelector("#selection-actions").hidden = true; if (clearSelection) pendingSelection = null; }
+  function showingChanges() { return Boolean(revisionContext && revisionContext.session.viewMode === "changes"); }
+  function persistRevisionSource(jobId) {
+    if (!jobId || !reviewIdentity || !sourcePackage) return;
+    const ownerReview = review?.completed ? buildOwnerReviewPackage() : MaxQuillRevisionReview.ownerReviewFromLocal(review, sourcePackage);
+    writeStorage(MaxQuillRevisionReview.sourceStorageKey(jobId), MaxQuillRevisionReview.createSourceRecord(jobId, reviewIdentity, sourcePackage, ownerReview));
+  }
+  function saveRevisionSession() {
+    if (!revisionContext?.afterIdentity) return;
+    writeStorage(MaxQuillRevisionReview.sessionStorageKey(revisionContext.afterIdentity), revisionContext.session);
+  }
+  function refreshRevisionModel() {
+    if (!revisionContext) return;
+    revisionContext.model = MaxQuillRevisionReview.applyAccepted(MaxQuillRevisionDiff.buildRevisionReviewModel(revisionContext.beforePackage, sourcePackage, revisionContext.ownerReview), revisionContext.session.acceptedChangeIds);
+  }
+  async function attachRevisionContext(resultJob, afterPackage) {
+    if (!window.MaxQuillRevisionDiff || !window.MaxQuillRevisionReview) return null;
+    const afterIdentity = await MaxQuillReviewApi.packageIdentity(afterPackage);
+    const stored = MaxQuillRevisionReview.normalizeSourceRecord(readStorage(MaxQuillRevisionReview.sourceStorageKey(resultJob), null), { jobId: resultJob, bookId: afterPackage.bookId, chapterId: afterPackage.chapterId, chapterNumber: afterPackage.chapterNumber, chapterVersion: afterPackage.chapterVersion - 1 });
+    let beforePackage = stored?.sourcePackage || null, ownerReview = stored?.ownerReview || null;
+    if (!beforePackage && afterPackage.chapterVersion > 1) {
+      try {
+        const response = await fetch(packageUrl(afterPackage.bookId, afterPackage.chapterNumber, afterPackage.chapterVersion - 1));
+        if (response.ok) {
+          const candidate = await response.json(), validation = MaxQuillReviewContract.validateReviewReadyPackage(candidate);
+          if (validation.valid && candidate.bookId === afterPackage.bookId && candidate.chapterId === afterPackage.chapterId && candidate.chapterNumber === afterPackage.chapterNumber && candidate.chapterVersion === afterPackage.chapterVersion - 1) beforePackage = candidate;
+        }
+      } catch (error) { console.warn("Could not load the previous review package.", error); }
+    }
+    if (!beforePackage) return null;
+    const beforeIdentity = await MaxQuillReviewApi.packageIdentity(beforePackage);
+    if (!ownerReview) ownerReview = MaxQuillRevisionReview.ownerReviewFromLocal(readStorage(MaxQuillReviewApi.reviewStorageKey(beforeIdentity), null), beforePackage);
+    if (ownerReview && !MaxQuillReviewContract.validateOwnerReviewPackage(ownerReview, beforePackage).valid) ownerReview = null;
+    revisionContext = { jobId: resultJob, beforePackage, beforeIdentity, afterIdentity, ownerReview, session: MaxQuillRevisionReview.normalizeSession(readStorage(MaxQuillRevisionReview.sessionStorageKey(afterIdentity), null), beforeIdentity, afterIdentity), model: null };
+    refreshRevisionModel();
+    return revisionContext;
+  }
+  function chapterStatusLine() {
+    if (!revisionContext) return `Review Candidate · Version ${sourcePackage.chapterVersion} · REVIEW_READY`;
+    return `Revision Ready · ${showingChanges() ? "Review Changes" : "Full Chapter"} · Version ${sourcePackage.chapterVersion}`;
+  }
+  function node(tag, className, text) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text != null) element.textContent = text;
+    return element;
+  }
+  function renderPassage(target, text, tokens, keep) {
+    if (!tokens || !tokens.length) { target.textContent = text || ""; return; }
+    for (const token of tokens) {
+      if (keep && token.type !== "equal" && token.type !== keep) continue;
+      if (token.type === "equal") target.append(document.createTextNode(token.text));
+      else { const mark = node("span", token.type === "inserted" ? "revision-ins" : "revision-del", token.text); target.append(mark); }
+    }
+    if (!target.childNodes.length) target.textContent = text || "";
+  }
+  function kindLabel(kind) { return { changed: "Changed", removed: "Removed", inserted: "Inserted", moved: "Moved", unchanged: "Unchanged" }[kind] || kind; }
+  function originLabel(origin) { return origin === "owner_requested" ? "Owner-requested change" : "Additional revision change"; }
+  function appendSide(parent, label, passage, context, tokens, keep, paragraphId) {
+    const side = node("div", "revision-side");
+    side.append(node("span", "", label));
+    if (context?.previous) side.append(node("p", "revision-context", `[…] ${context.previous}`));
+    if (!passage) side.append(node("p", "revision-empty", label === "After" ? "[removed]" : "[none]"));
+    else {
+      const body = node("p", "revision-passage");
+      if (paragraphId) { body.id = `paragraph-${paragraphId}`; body.dataset.paragraphId = paragraphId; }
+      renderPassage(body, passage.text, tokens, keep);
+      side.append(body);
+    }
+    if (context?.next) side.append(node("p", "revision-context", `${context.next} […]`));
+    parent.append(side);
+  }
+  function appendOwnerReviews(card, reviews) {
+    for (const note of reviews || []) {
+      const block = node("div", "revision-review");
+      block.append(node("p", "", `Original review · ${note.category}`));
+      const quote = document.createElement("q"); quote.textContent = note.selectedText; block.append(quote);
+      const comment = document.createElement("blockquote"); comment.textContent = note.comment; block.append(comment);
+      card.append(block);
+    }
+  }
+  function changeParagraph(change) {
+    if (change.after?.id) return sourcePackage.content.find((item) => item.id === change.after.id) || null;
+    return null;
+  }
+  function commentOnChange(change, category = "wording", preset = "") {
+    const paragraph = changeParagraph(change) || (change.after ? { id: change.after.id, text: change.after.text } : null);
+    if (!paragraph) { showMessage("#selection-message", "Open the full chapter to comment near this removal."); return; }
+    const candidate = { paragraphId: paragraph.id, startParagraphId: paragraph.id, endParagraphId: paragraph.id, selectedText: paragraph.text, selectionStart: 0, selectionEnd: paragraph.text.length };
+    if (!MaxQuillSelectionLogic.validateSelectionCandidate(sourcePackage, candidate).valid) { showMessage("#selection-message", "This passage cannot be annotated."); return; }
+    pendingSelection = candidate;
+    openEditor(null, category);
+    if (preset) document.querySelector("#annotation-comment").value = preset;
+  }
+  function acceptChange(changeId) {
+    if (!revisionContext) return;
+    revisionContext.session = MaxQuillRevisionReview.toggleAccepted(revisionContext.session, changeId);
+    saveRevisionSession(); refreshRevisionModel(); renderChapterBody(); updateReviewUi();
+  }
+  function acceptAllChanges() {
+    if (!revisionContext) return;
+    revisionContext.session = MaxQuillRevisionReview.acceptAll(revisionContext.session, (revisionContext.model?.changes || []).map((change) => change.id));
+    saveRevisionSession(); refreshRevisionModel(); renderChapterBody(); updateReviewUi();
+  }
+  function toggleRevisionView() {
+    if (!revisionContext) return;
+    revisionContext.session = { ...revisionContext.session, viewMode: showingChanges() ? "full" : "changes" };
+    saveRevisionSession();
+    const status = document.querySelector(".chapter-review-status");
+    if (status) status.textContent = chapterStatusLine();
+    renderChapterBody();
+    updateReviewUi();
+  }
+  function renderRevisionChanges() {
+    const body = document.querySelector("#chapter-body"); if (!body || !revisionContext?.model) return;
+    body.replaceChildren();
+    const model = revisionContext.model, toolbar = node("div", "revision-toolbar"), summary = node("p");
+    summary.textContent = `${model.summary.total} ${model.summary.total === 1 ? "change" : "changes"} · ${model.summary.ownerRequested} owner-requested · ${model.summary.additional} additional${model.summary.unmatched ? ` · ${model.summary.unmatched} with no detectable text change` : ""}`;
+    toolbar.append(summary);
+    if (model.changes.length) {
+      const acceptAll = node("button", "", "Accept All"); acceptAll.type = "button"; acceptAll.addEventListener("click", acceptAllChanges); toolbar.append(acceptAll);
+    }
+    body.append(toolbar);
+    if (!model.changes.length && !model.unmatchedReviewItems.length) {
+      body.append(node("p", "revision-empty", "No detectable text changes. View the full chapter to read the revised version."));
+      return;
+    }
+    model.changes.forEach((change, index) => {
+      const card = node("article", `revision-change${change.accepted ? " is-accepted" : ""}`);
+      card.dataset.changeId = change.id;
+      card.append(node("p", "revision-kicker", `Change ${index + 1} · ${kindLabel(change.kind)}`));
+      card.append(node("p", "revision-origin", originLabel(change.origin)));
+      appendOwnerReviews(card, change.ownerReviews);
+      const pair = node("div", "revision-pair");
+      appendSide(pair, "Before", change.before, change.beforeContext, change.inline, "removed", null);
+      appendSide(pair, "After", change.after, change.afterContext, change.inline, "inserted", change.after?.id || null);
+      card.append(pair);
+      const actions = node("div", "revision-actions");
+      const accept = node("button", change.accepted ? "is-accepted" : "", change.accepted ? "Accepted" : "Accept"); accept.type = "button"; accept.dataset.changeAction = "accept"; accept.addEventListener("click", () => acceptChange(change.id));
+      const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(change));
+      const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(change, "other", "Flagged for revision."));
+      actions.append(accept, comment, flag); card.append(actions); body.append(card);
+    });
+    model.unmatchedReviewItems.forEach((item, index) => {
+      const card = node("article", "revision-change");
+      card.append(node("p", "revision-kicker", `Review item ${index + 1}`));
+      card.append(node("p", "revision-alert", "Review item produced no detectable text change"));
+      appendOwnerReviews(card, item.annotation ? [item.annotation] : []);
+      if (item.after) {
+        const pair = node("div", "revision-pair");
+        appendSide(pair, "Current text", item.after, null, null, null, item.after.id);
+        card.append(pair);
+        const actions = node("div", "revision-actions");
+        const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(item));
+        const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(item, "other", "Flagged for revision."));
+        actions.append(comment, flag); card.append(actions);
+      }
+      body.append(card);
+    });
+  }
+  function renderChapterBody() { if (showingChanges()) renderRevisionChanges(); else renderParagraphs(); }
 
   function applyPreferences(preferences) {
     const root = document.documentElement;
@@ -35,7 +195,7 @@
     document.documentElement.dataset.readerMode = next; writeStorage(MODE_KEY, next);
     document.querySelectorAll("[data-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === next)));
     document.querySelector("#review-bar").hidden = next !== "review"; hideSelectionActions(true); showMessage("#selection-message", "");
-    window.getSelection()?.removeAllRanges(); renderParagraphs();
+    window.getSelection()?.removeAllRanges(); renderChapterBody();
   }
   function setupModes() { document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode))); setMode(readStorage(MODE_KEY, "read")); }
   function navMarkup(position) {
@@ -43,8 +203,8 @@
     return `<nav class="reader-nav ${position}" aria-label="${position === "top" ? "Chapter navigation" : "End of chapter navigation"}">${previous ? `<a class="nav-link previous" href="${chapterUrl(previous)}">&larr; Previous chapter</a>` : '<span class="nav-link previous disabled" aria-hidden="true">Previous</span>'}<a class="nav-link back" href="book.html?book=${encodeURIComponent(book.id)}">Back to book</a>${next ? `<a class="nav-link next" data-next-chapter href="${chapterUrl(next)}">Next chapter &rarr;</a>` : '<span class="nav-link next disabled" aria-hidden="true">Next</span>'}</nav>`;
   }
   function renderReader() {
-    document.querySelector("#reader-content").innerHTML = `${navMarkup("top")}<article class="chapter-article" aria-labelledby="chapter-title"><header class="chapter-heading"><p class="eyebrow">Chapter ${sourcePackage.chapterNumber}</p><h1 id="chapter-title"></h1><p class="chapter-review-status">Review Candidate &middot; Version ${sourcePackage.chapterVersion} &middot; REVIEW_READY</p></header><div class="chapter-body" id="chapter-body"></div></article>${navMarkup("bottom")}`;
-    document.querySelector("#chapter-title").textContent = sourcePackage.title; renderParagraphs();
+    document.querySelector("#reader-content").innerHTML = `${navMarkup("top")}<article class="chapter-article" aria-labelledby="chapter-title"><header class="chapter-heading"><p class="eyebrow">Chapter ${sourcePackage.chapterNumber}</p><h1 id="chapter-title"></h1><p class="chapter-review-status">${chapterStatusLine()}</p></header><div class="chapter-body" id="chapter-body"></div></article>${navMarkup("bottom")}`;
+    document.querySelector("#chapter-title").textContent = sourcePackage.title; renderChapterBody();
   }
   function appendHighlightedText(paragraph, item, annotations) {
     const usable = [...annotations].sort((a, b) => a.selectionStart - b.selectionStart).filter((note, index, all) => !all[index - 1] || note.selectionStart >= all[index - 1].selectionEnd); let cursor = 0;
@@ -87,16 +247,16 @@
     if (!annotation.comment) { showMessage("#annotation-message", "Add a comment before saving this note."); return; }
     const paragraph = sourcePackage.content.find((item) => item.id === annotation.paragraphId); if (!paragraph || paragraph.text.substring(annotation.selectionStart, annotation.selectionEnd) !== annotation.selectedText) { showMessage("#annotation-message", "This selection no longer matches the original paragraph. Select the text again."); return; }
     const validation = MaxQuillReviewContract.validateOwnerReviewPackage(buildOwnerReviewPackage([annotation]), sourcePackage); if (!validation.valid) { showMessage("#annotation-message", validation.errors.join(" ")); return; }
-    if (existing) Object.assign(existing, annotation); else review.annotations.push(annotation); review.completed = false; review.reviewedAt = null; saveReview(); closeEditor(); renderParagraphs();
+    if (existing) Object.assign(existing, annotation); else review.annotations.push(annotation); review.completed = false; review.reviewedAt = null; saveReview(); closeEditor(); renderChapterBody();
   }
   function quickFlag() { if (!pendingSelection) return; openEditor(null, "other"); document.querySelector("#annotation-comment").value = "Flagged for revision."; }
   function closeEditor() { document.querySelector("#annotation-dialog").close(); hideSelectionActions(true); window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; actionEngaged = false; }
-  function deleteAnnotation() { if (!editingId) return; review.annotations = review.annotations.filter((note) => note.id !== editingId); review.completed = false; review.reviewedAt = null; saveReview(); closeEditor(); renderParagraphs(); }
+  function deleteAnnotation() { if (!editingId) return; review.annotations = review.annotations.filter((note) => note.id !== editingId); review.completed = false; review.reviewedAt = null; saveReview(); closeEditor(); renderChapterBody(); }
   function updateReviewUi() {
-    if (!review || !sourcePackage) return; document.querySelector("#review-chapter-status").textContent = `Review Candidate · Version ${sourcePackage.chapterVersion}`; document.querySelector("#open-note-count").textContent = `Review Notes · ${review.annotations.length}`; document.querySelector('[data-mode="review"]').textContent = review.annotations.length ? `Review (${review.annotations.length})` : "Review";
+    if (!review || !sourcePackage) return; document.querySelector("#review-chapter-status").textContent = chapterStatusLine(); document.querySelector("#open-note-count").textContent = showingChanges() ? `Changes · ${revisionContext.model?.summary.total || 0}` : `Review Notes · ${review.annotations.length}`; document.querySelector('[data-mode="review"]').textContent = review.annotations.length ? `Review (${review.annotations.length})` : "Review";
     document.querySelector("#review-summary").innerHTML = `<p><strong>${review.annotations.length} ${review.annotations.length === 1 ? "note" : "notes"}</strong><br>Review for Version ${sourcePackage.chapterVersion} · ${review.completed ? "Owner Review Complete" : "Review in progress"}</p>`;
     const list = document.querySelector("#review-note-list"); list.replaceChildren(); if (!review.annotations.length) { const empty = document.createElement("li"); empty.className = "empty-notes"; empty.textContent = "No notes yet. Select text in Review Mode to begin."; list.append(empty); }
-    review.annotations.forEach((note, index) => { const item = document.createElement("li"); item.className = "review-note"; item.innerHTML = '<button type="button" class="note-jump"><span></span><q></q><small></small></button><button type="button" class="note-edit">Edit</button>'; item.querySelector("span").textContent = `${index + 1}. ${note.category} · ${note.status}${note.requiresCanonChange ? " · Canon change" : ""}`; item.querySelector("q").textContent = note.selectedText; item.querySelector("small").textContent = note.comment; item.querySelector(".note-jump").addEventListener("click", () => { document.querySelector("#review-panel").close(); document.querySelector(`#paragraph-${note.paragraphId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }); item.querySelector(".note-edit").addEventListener("click", () => { document.querySelector("#review-panel").close(); openEditor(note); }); list.append(item); });
+    review.annotations.forEach((note, index) => { const item = document.createElement("li"); item.className = "review-note"; item.innerHTML = '<button type="button" class="note-jump"><span></span><q></q><small></small></button><button type="button" class="note-edit">Edit</button>'; item.querySelector("span").textContent = `${index + 1}. ${note.category} · ${note.status}${note.requiresCanonChange ? " · Canon change" : ""}`; item.querySelector("q").textContent = note.selectedText; item.querySelector("small").textContent = note.comment; item.querySelector(".note-jump").addEventListener("click", () => { document.querySelector("#review-panel").close(); if (revisionContext && showingChanges() && !document.querySelector(`#paragraph-${note.paragraphId}`)) { revisionContext.session = { ...revisionContext.session, viewMode: "full" }; saveRevisionSession(); const status = document.querySelector(".chapter-review-status"); if (status) status.textContent = chapterStatusLine(); renderChapterBody(); updateReviewUi(); } document.querySelector(`#paragraph-${note.paragraphId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }); item.querySelector(".note-edit").addEventListener("click", () => { document.querySelector("#review-panel").close(); openEditor(note); }); list.append(item); });
     const finish = document.querySelector("#finish-review"); finish.textContent = review.completed ? "Owner Review Complete" : "Finish Review"; finish.setAttribute("aria-pressed", String(review.completed)); finish.disabled = review.completed; updateJobUi();
   }
   function finishReview() { const previousReviewedAt = review.reviewedAt; review.reviewedAt = new Date().toISOString(); const validation = MaxQuillReviewContract.validateOwnerReviewPackage(buildOwnerReviewPackage(), sourcePackage); if (!validation.valid) { review.reviewedAt = previousReviewedAt; showMessage("#review-message", `Review cannot be completed: ${validation.errors.join(" ")}`); return; } review.completed = true; showMessage("#review-message", "Review complete."); saveReview(); }
@@ -104,15 +264,17 @@
     showMessage("#review-message", ""); if (!review.completed) { showMessage("#review-message", "Finish the review before exporting."); return; } const reviewPackage = buildOwnerReviewPackage(), validation = MaxQuillReviewContract.validateOwnerReviewPackage(reviewPackage, sourcePackage); if (!validation.valid) { showMessage("#review-message", `Export blocked: ${validation.errors.join(" ")}`); return; }
     const blob = new Blob([JSON.stringify(reviewPackage, null, 2)], { type: "application/json" }), url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = `${sourcePackage.bookId}-${sourcePackage.chapterId}-v${sourcePackage.chapterVersion}-owner-review.json`; document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function persistJob(job) { reviewJob = job; writeStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), job); updateJobUi(); }
+  function persistJob(job) { reviewJob = job; writeStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), job); persistRevisionSource(job.jobId); updateJobUi(); }
   function updateJobUi() {
-    if (!review || !sourcePackage) return; const submit = document.querySelector("#submit-review"), openRevision = document.querySelector("#open-revised-version"), completion = document.querySelector("#review-job-status strong"), submitted = document.querySelector("#submission-state"), queue = document.querySelector("#queue-status");
+    if (!review || !sourcePackage) return; const submit = document.querySelector("#submit-review"), openRevision = document.querySelector("#open-revised-version"), toggleView = document.querySelector("#toggle-revision-view"), completion = document.querySelector("#review-job-status strong"), submitted = document.querySelector("#submission-state"), queue = document.querySelector("#queue-status");
     const state = MaxQuillSubmitFlow.reviewUiState(review, reviewJob, submitting, MaxQuillReviewApi.STATUS_LABELS);
+    const view = MaxQuillRevisionReview.revisionViewState({ hasRevisionPair: Boolean(revisionContext), viewMode: revisionContext?.session?.viewMode || "changes", jobStatus: reviewJob?.status });
     completion.textContent = state.completion; submitted.hidden = state.submittedHidden; submitted.textContent = state.submitted; queue.hidden = state.queueHidden; queue.textContent = state.queue; queue.className = "";
-    if (state.readerStatus) document.querySelector("#review-chapter-status").textContent = state.readerStatus;
+    if (state.readerStatus && !revisionContext) document.querySelector("#review-chapter-status").textContent = state.readerStatus;
     if (reviewJob?.status === "REVISION_READY") queue.className = "is-ready"; if (reviewJob?.status === "FAILED") queue.className = "is-failed";
     submit.hidden = state.submitHidden; submit.disabled = state.submitDisabled; submit.textContent = state.submitText;
-    openRevision.hidden = reviewJob?.status !== "REVISION_READY";
+    openRevision.hidden = view.openRevisedHidden; openRevision.textContent = view.openRevisedLabel;
+    toggleView.hidden = view.toggleHidden; toggleView.textContent = view.toggleLabel;
   }
   function submissionError(error) {
     if (error.kind === "conflict" || error.kind === "auth" || error.kind === "validation" || error.kind === "submit-network") return error.message;
@@ -127,15 +289,16 @@
   }
   async function refreshJobStatus() {
     if (!reviewJob || ["REVISION_READY", "FAILED"].includes(reviewJob.status)) { stopPolling(); return; }
-    try { const job = await MaxQuillReviewApi.getReviewJob(reviewJob.jobId, reviewIdentity); job.submittedAt = reviewJob.submittedAt; persistJob(job); if (job.status === "REVISION_READY") { showMessage("#review-message", "Revision ready. Open the revised version when you are ready."); stopPolling(); } else if (job.status === "FAILED") { showMessage("#review-message", `Revision failed. ${job.error?.message || "Download the review JSON to retain the handoff."}`); stopPolling(); } }
+    try { const job = await MaxQuillReviewApi.getReviewJob(reviewJob.jobId, reviewIdentity); job.submittedAt = reviewJob.submittedAt; persistJob(job); if (job.status === "REVISION_READY") { showMessage("#review-message", "Revision ready. Review the changes when you are ready."); stopPolling(); } else if (job.status === "FAILED") { showMessage("#review-message", `Revision failed. ${job.error?.message || "Download the review JSON to retain the handoff."}`); stopPolling(); } }
     catch (error) { showMessage("#review-message", error.message || "Status check failed."); }
   }
   function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
   function startPolling() { stopPolling(); if (reviewJob && !["REVISION_READY", "FAILED"].includes(reviewJob.status)) pollTimer = setInterval(refreshJobStatus, 12000); }
   async function openRevisedVersion() {
     if (reviewJob?.status !== "REVISION_READY") return;
-    const button = document.querySelector("#open-revised-version"); button.disabled = true; showMessage("#review-message", "Loading revised version...");
+    const button = document.querySelector("#open-revised-version"); button.disabled = true; showMessage("#review-message", "Loading revision changes...");
     try {
+      persistRevisionSource(reviewJob.jobId);
       const result = await MaxQuillReviewApi.getReviewResult(reviewJob.jobId, reviewIdentity);
       writeStorage(MaxQuillReviewApi.resultStorageKey(reviewJob.jobId), result);
       location.assign(`reader.html?book=${encodeURIComponent(result.bookId)}&chapter=${result.chapterNumber}&version=${result.chapterVersion}&resultJob=${encodeURIComponent(reviewJob.jobId)}`);
@@ -148,17 +311,17 @@
     actions.addEventListener("pointerdown", () => { actionEngaged = true; }); actions.addEventListener("click", (event) => { if (event.target.dataset.selectionAction === "comment") openEditor(); if (event.target.dataset.selectionAction === "flag") quickFlag(); actionEngaged = false; });
     addEventListener("scroll", () => { hideSelectionActions(false); showMessage("#selection-message", ""); }, { passive: true }); addEventListener("resize", () => { hideSelectionActions(false); handleTextSelection(180); }); addEventListener("orientationchange", () => { hideSelectionActions(false); handleTextSelection(250); });
     const submitHandler = MaxQuillSubmitFlow.createSubmitHandler({ submitAction: submitReview, setSubmitting(value) { submitting = value; updateJobUi(); }, showUnexpectedError(message) { showMessage("#review-message", message); } });
-    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelector("#finish-review").addEventListener("click", finishReview); document.querySelector("#submit-review").addEventListener("click", submitHandler); document.querySelector("#open-revised-version").addEventListener("click", openRevisedVersion); addEventListener("pagehide", stopPolling); updateReviewUi();
+    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelector("#finish-review").addEventListener("click", finishReview); document.querySelector("#submit-review").addEventListener("click", submitHandler); document.querySelector("#open-revised-version").addEventListener("click", openRevisedVersion); document.querySelector("#toggle-revision-view").addEventListener("click", toggleRevisionView); addEventListener("pagehide", stopPolling); updateReviewUi();
   }
   function saveProgress(markRead = false) { const read = new Set(progress.readChapters || []); if (markRead) read.add(String(sourcePackage.chapterNumber)); const furthest = window.MaxQuillCompanion ? MaxQuillCompanion.advanceFurthestChapter(progress, sourcePackage.chapterNumber, markRead) : Math.max(Number(progress.furthestChapter || 0), ...[...read].map(Number)); progress = { bookId: book.id, currentChapter: String(sourcePackage.chapterNumber), furthestChapter: furthest, readingProgress: Math.min(1, scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight)), lastOpened: new Date().toISOString(), readChapters: [...read], scrollPositions: { ...(progress.scrollPositions || {}), [sourcePackage.chapterId]: Math.round(scrollY) } }; writeStorage(PROGRESS_KEY, progress); if (window.MaxQuillCompanion) companionState = MaxQuillCompanion.getCompanionState(companionManifest, { progress, viewedChapterId: sourcePackage.chapterId }); }
   function setupProgress() { const saved = Number(progress.scrollPositions?.[sourcePackage.chapterId] || 0); requestAnimationFrame(() => scrollTo({ top: saved, behavior: "instant" })); addEventListener("scroll", () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { const max = Math.max(1, document.documentElement.scrollHeight - innerHeight); saveProgress(scrollY / max >= .88); }, 400); }, { passive: true }); addEventListener("pagehide", () => saveProgress()); document.querySelectorAll("[data-next-chapter]").forEach((link) => link.addEventListener("click", () => saveProgress(true))); }
   async function init() {
     setupSettings(); try {
-      if (!window.MaxQuillReviewContract || !window.MaxQuillSelectionLogic || !window.MaxQuillReviewApi || !window.MaxQuillSubmitFlow) throw new Error("Review validation support is unavailable."); const bookResponse = await fetch(BOOK_URL); if (!bookResponse.ok) throw new Error(`Book data returned ${bookResponse.status}`); book = await bookResponse.json();
+      if (!window.MaxQuillReviewContract || !window.MaxQuillSelectionLogic || !window.MaxQuillReviewApi || !window.MaxQuillSubmitFlow || !window.MaxQuillRevisionDiff || !window.MaxQuillRevisionReview) throw new Error("Review validation support is unavailable."); const bookResponse = await fetch(BOOK_URL); if (!bookResponse.ok) throw new Error(`Book data returned ${bookResponse.status}`); book = await bookResponse.json();
       const params = new URLSearchParams(location.search), requestedBook = params.get("book") || book.id, requestedNumber = Number.parseInt(params.get("chapter") || String(book.chapters[0].number), 10); chapter = book.chapters.find((item) => item.number === requestedNumber); if (requestedBook !== book.id || !chapter) throw new Error("The requested review candidate is not available."); const version = Number.parseInt(params.get("version") || String(chapter.version), 10), resultJob = params.get("resultJob"); if (!Number.isInteger(version) || version < 1) throw new Error("The requested chapter version is invalid.");
       if (resultJob) { const original = { bookId: requestedBook, chapterId: chapter.chapterId, chapterNumber: requestedNumber, chapterVersion: version - 1 }; try { sourcePackage = await MaxQuillReviewApi.getReviewResult(resultJob, original); writeStorage(MaxQuillReviewApi.resultStorageKey(resultJob), sourcePackage); } catch (error) { const cached = readStorage(MaxQuillReviewApi.resultStorageKey(resultJob), null), cachedValidation = MaxQuillReviewContract.validateReviewReadyPackage(cached); if (!cachedValidation.valid || cached?.bookId !== requestedBook || cached?.chapterId !== chapter.chapterId || cached?.chapterNumber !== requestedNumber || cached?.chapterVersion !== version) throw error; sourcePackage = cached; } } else { const response = await fetch(packageUrl(requestedBook, requestedNumber, version)); if (!response.ok) throw new Error(`Review candidate returned ${response.status}`); sourcePackage = await response.json(); }
       const validation = MaxQuillReviewContract.validateReviewReadyPackage(sourcePackage); if (!validation.valid) throw new Error(`Contract validation failed: ${validation.errors.join(" ")}`); if (sourcePackage.bookId !== requestedBook || sourcePackage.chapterNumber !== requestedNumber || sourcePackage.chapterVersion !== version || sourcePackage.chapterId !== chapter.chapterId) throw new Error("Contract validation failed: package identity does not match the requested review candidate.");
-      reviewIdentity = await MaxQuillReviewApi.packageIdentity(sourcePackage); progress = readStorage(PROGRESS_KEY, { bookId: book.id, readChapters: [], scrollPositions: {} }); review = readStorage(reviewKey(), newReview()); if (!review || typeof review !== "object" || review.packageFingerprint !== reviewIdentity.packageFingerprint || !Array.isArray(review.annotations) || typeof review.completed !== "boolean") review = newReview(); if (review.completed && !review.reviewedAt) { review.reviewedAt = new Date().toISOString(); writeStorage(reviewKey(), review); } reviewJob = MaxQuillReviewApi.normalizeJob(readStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), null), reviewIdentity); if (window.MaxQuillCompanion) { const loaded = await MaxQuillCompanion.loadCompanionManifest(MaxQuillCompanion.companionUrl(book.id)); companionManifest = loaded.manifest; companionState = MaxQuillCompanion.getCompanionState(companionManifest, { progress, viewedChapterId: sourcePackage.chapterId }); } document.title = `Chapter ${sourcePackage.chapterNumber}: ${sourcePackage.title} | MaxQuill`; renderReader(); setupModes(); setupReview(); saveProgress(); setupProgress(); if (reviewJob) { await refreshJobStatus(); startPolling(); }
+      reviewIdentity = await MaxQuillReviewApi.packageIdentity(sourcePackage); if (resultJob) await attachRevisionContext(resultJob, sourcePackage); progress = readStorage(PROGRESS_KEY, { bookId: book.id, readChapters: [], scrollPositions: {} }); review = readStorage(reviewKey(), newReview()); if (!review || typeof review !== "object" || review.packageFingerprint !== reviewIdentity.packageFingerprint || !Array.isArray(review.annotations) || typeof review.completed !== "boolean") review = newReview(); if (review.completed && !review.reviewedAt) { review.reviewedAt = new Date().toISOString(); writeStorage(reviewKey(), review); } reviewJob = MaxQuillReviewApi.normalizeJob(readStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), null), reviewIdentity); if (window.MaxQuillCompanion) { const loaded = await MaxQuillCompanion.loadCompanionManifest(MaxQuillCompanion.companionUrl(book.id)); companionManifest = loaded.manifest; companionState = MaxQuillCompanion.getCompanionState(companionManifest, { progress, viewedChapterId: sourcePackage.chapterId }); } document.title = `Chapter ${sourcePackage.chapterNumber}: ${sourcePackage.title} | MaxQuill`; renderReader(); setupModes(); if (revisionContext) setMode("review"); setupReview(); saveProgress(); setupProgress(); if (reviewJob) { await refreshJobStatus(); startPolling(); }
     } catch (error) { console.error("Could not open chapter.", error); document.querySelector("#reader-content").innerHTML = `<p class="error-message reader-loading">This review candidate could not be opened. ${String(error.message || error)} <a href="book.html">Return to the book</a>.</p>`; }
   }
   init();

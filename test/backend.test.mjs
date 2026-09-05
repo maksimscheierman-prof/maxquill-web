@@ -67,6 +67,14 @@ test("HTTP_400 failure can retry a valid newer result without a second revision 
   const different = { ...resultPackage(), title: "Different title" };
   await expectApi(service.result(id, { workerId: "worker-recovery", reviewReadyPackage: different }), 409, "RESULT_CONFLICT");
 });
+test("ENGINE_COMMAND_FAILED can deliver a later valid result without a second revision lifecycle", async () => {
+  const service = queue(), id = (await service.submit(review(), packageA)).job.jobId;
+  await service.claim(id, { workerId: "worker-1" });
+  await service.processing(id, { workerId: "worker-1" });
+  assert.equal((await service.fail(id, { workerId: "worker-1", errorCode: "ENGINE_COMMAND_FAILED", errorMessage: "Book CLI command failed with exit code 1" })).status, "FAILED");
+  const recovered = await service.result(id, { workerId: "worker-recovery", reviewReadyPackage: resultPackage() });
+  assert.equal(recovered.status, "REVISION_READY");
+});
 test("engine FAILED jobs cannot be recovered through result upload", async () => {
   const service = queue(), id = (await service.submit(review(), packageA)).job.jobId;
   await service.claim(id, { workerId: "worker-1" });
