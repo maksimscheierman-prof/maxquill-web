@@ -192,10 +192,228 @@
     }).sort((left, right) => left.displayIndex - right.displayIndex || (left.before?.index ?? -1) - (right.before?.index ?? -1));
   }
 
+  const OWNER_CLUSTER_MAX_SPAN = 10;
+  const ADDITIONAL_CLUSTER_GAP = 2;
+
+  function changeIndexes(change) {
+    return {
+      before: Number.isInteger(change.before?.index) ? change.before.index : null,
+      after: Number.isInteger(change.after?.index) ? change.after.index : null
+    };
+  }
+
+  function clusterBounds(changeList) {
+    let minBefore = Infinity, maxBefore = -Infinity, minAfter = Infinity, maxAfter = -Infinity;
+    for (const change of changeList) {
+      const indexes = changeIndexes(change);
+      if (indexes.before != null) { minBefore = Math.min(minBefore, indexes.before); maxBefore = Math.max(maxBefore, indexes.before); }
+      if (indexes.after != null) { minAfter = Math.min(minAfter, indexes.after); maxAfter = Math.max(maxAfter, indexes.after); }
+    }
+    return {
+      minBefore: Number.isFinite(minBefore) ? minBefore : null,
+      maxBefore: Number.isFinite(maxBefore) ? maxBefore : null,
+      minAfter: Number.isFinite(minAfter) ? minAfter : null,
+      maxAfter: Number.isFinite(maxAfter) ? maxAfter : null
+    };
+  }
+
+  function changeTouchesBounds(change, bounds, pad = 1) {
+    const indexes = changeIndexes(change);
+    if (bounds.minBefore != null && indexes.before != null) {
+      if (indexes.before >= bounds.minBefore - pad && indexes.before <= bounds.maxBefore + pad) return true;
+    }
+    if (bounds.minAfter != null && indexes.after != null) {
+      if (indexes.after >= bounds.minAfter - pad && indexes.after <= bounds.maxAfter + pad) return true;
+    }
+    return false;
+  }
+
+  function spanTooLarge(bounds) {
+    const beforeSpan = bounds.minBefore != null ? bounds.maxBefore - bounds.minBefore : 0;
+    const afterSpan = bounds.minAfter != null ? bounds.maxAfter - bounds.minAfter : 0;
+    return beforeSpan > OWNER_CLUSTER_MAX_SPAN || afterSpan > OWNER_CLUSTER_MAX_SPAN;
+  }
+
+  function seedsForAnnotation(annotation, changes, before) {
+    const seeds = [];
+    const quote = normalizeText(annotation.selectedText || annotation.quote || "");
+    const anchorIndex = before.findIndex((paragraph) => paragraph.id === annotation.paragraphId);
+    for (const change of changes) {
+      if (change.before?.id && change.before.id === annotation.paragraphId) { seeds.push(change); continue; }
+      if (quote && change.before?.text && normalizeText(change.before.text).includes(quote)) { seeds.push(change); continue; }
+      if (anchorIndex >= 0 && change.before?.index === anchorIndex) seeds.push(change);
+    }
+    if (seeds.length || anchorIndex < 0) return [...new Set(seeds)];
+    // Anchor paragraph vanished into a local rewrite gap: seed from nearest changed neighbors.
+    const nearby = changes.filter((change) => {
+      const indexes = changeIndexes(change);
+      return (indexes.before != null && Math.abs(indexes.before - anchorIndex) <= 2)
+        || (indexes.after != null && Math.abs(indexes.after - anchorIndex) <= 3);
+    });
+    return nearby;
+  }
+
+  function pathClear(from, to, stableIndexes) {
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return true;
+    const start = Math.min(from, to), end = Math.max(from, to);
+    for (let index = start + 1; index < end; index += 1) if (stableIndexes.has(index)) return false;
+    return true;
+  }
+
+  function changeReachableWithoutStableGap(change, bounds, stableBefore, stableAfter) {
+    const indexes = changeIndexes(change);
+    if (indexes.before != null && bounds.minBefore != null) {
+      const edge = indexes.before < bounds.minBefore ? bounds.minBefore : bounds.maxBefore;
+      if (!pathClear(edge, indexes.before, stableBefore) && !(indexes.before >= bounds.minBefore && indexes.before <= bounds.maxBefore)) return false;
+    } else if (indexes.before != null && bounds.minBefore == null) {
+      /* insert-only cluster may still attach via after-side */
+    }
+    if (indexes.after != null && bounds.minAfter != null) {
+      const edge = indexes.after < bounds.minAfter ? bounds.minAfter : bounds.maxAfter;
+      if (!pathClear(edge, indexes.after, stableAfter) && !(indexes.after >= bounds.minAfter && indexes.after <= bounds.maxAfter)) return false;
+    }
+    if (indexes.before == null && indexes.after == null) return false;
+    if (bounds.minBefore == null && bounds.minAfter == null) return true;
+    if (indexes.before != null && bounds.minBefore != null) {
+      if (indexes.before >= bounds.minBefore - 1 && indexes.before <= bounds.maxBefore + 1 && pathClear(indexes.before < bounds.minBefore ? bounds.minBefore : bounds.maxBefore, indexes.before, stableBefore)) return true;
+    }
+    if (indexes.after != null && bounds.minAfter != null) {
+      if (indexes.after >= bounds.minAfter - 1 && indexes.after <= bounds.maxAfter + 1 && pathClear(indexes.after < bounds.minAfter ? bounds.minAfter : bounds.maxAfter, indexes.after, stableAfter)) return true;
+    }
+    return false;
+  }
+
+  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignAnchors = new Set(), stableBefore = new Set(), stableAfter = new Set()) {
+    const cluster = [...seedChanges];
+    const clusterIds = new Set(cluster.map((change) => change.id));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      const bounds = clusterBounds(cluster);
+      if (spanTooLarge(bounds)) break;
+      for (const change of allChanges) {
+        if (clusterIds.has(change.id) || claimed.has(change.id)) continue;
+        if (change.before?.id && foreignAnchors.has(change.before.id)) continue;
+        if (!changeTouchesBounds(change, bounds, 1)) continue;
+        if (!changeReachableWithoutStableGap(change, bounds, stableBefore, stableAfter)) continue;
+        const next = [...cluster, change];
+        if (spanTooLarge(clusterBounds(next))) continue;
+        cluster.push(change);
+        clusterIds.add(change.id);
+        grew = true;
+      }
+    }
+    return cluster.sort((left, right) => left.displayIndex - right.displayIndex || (left.before?.index ?? -1) - (right.before?.index ?? -1));
+  }
+
+  function contextPadForIndexes(content, indexes) {
+    if (!indexes.length) return 1;
+    const shortCount = indexes.filter((index) => (content[index]?.text || "").length < 90).length;
+    return shortCount >= Math.ceil(indexes.length / 2) ? 2 : 1;
+  }
+
+  function collectBlockIndexes(content, touchedIndexes) {
+    const sorted = [...new Set(touchedIndexes.filter((index) => Number.isInteger(index) && index >= 0 && index < content.length))].sort((a, b) => a - b);
+    if (!sorted.length) return [];
+    const pad = contextPadForIndexes(content, sorted);
+    const start = Math.max(0, sorted[0] - pad);
+    const end = Math.min(content.length - 1, sorted[sorted.length - 1] + pad);
+    const indexes = [];
+    for (let index = start; index <= end; index += 1) indexes.push(index);
+    return indexes;
+  }
+
+  function buildPassageList(content, indexes, touched, roleFor) {
+    return indexes.map((index) => {
+      const paragraph = content[index];
+      const changed = touched.has(index);
+      return {
+        id: paragraph.id,
+        text: paragraph.text,
+        index,
+        role: changed ? roleFor : "context",
+        changed
+      };
+    });
+  }
+
+  function joinPassages(passages) {
+    return passages.map((passage) => passage.text).join("\n\n");
+  }
+
+  function dominantKind(hunks) {
+    const kinds = new Set(hunks.map((hunk) => hunk.kind));
+    if (kinds.size === 1) return hunks[0].kind;
+    if (kinds.has("changed") || (kinds.has("removed") && kinds.has("inserted"))) return "changed";
+    if (kinds.has("inserted")) return "inserted";
+    if (kinds.has("removed")) return "removed";
+    return "changed";
+  }
+
+  function makeGroupedChange({ id, origin, ownerReviews, hunks, beforeContent, afterContent }) {
+    const beforeTouched = new Set();
+    const afterTouched = new Set();
+    for (const hunk of hunks) {
+      if (Number.isInteger(hunk.before?.index)) beforeTouched.add(hunk.before.index);
+      if (Number.isInteger(hunk.after?.index)) afterTouched.add(hunk.after.index);
+    }
+    const beforeIndexes = collectBlockIndexes(beforeContent, [...beforeTouched]);
+    const afterIndexes = collectBlockIndexes(afterContent, [...afterTouched]);
+    const beforePassages = buildPassageList(beforeContent, beforeIndexes, beforeTouched, "removed");
+    const afterPassages = buildPassageList(afterContent, afterIndexes, afterTouched, "inserted");
+    const beforeText = joinPassages(beforePassages);
+    const afterText = joinPassages(afterPassages);
+    const firstBefore = beforePassages.find((passage) => passage.changed) || beforePassages[0] || null;
+    const firstAfter = afterPassages.find((passage) => passage.changed) || afterPassages[0] || null;
+    const change = {
+      id,
+      kind: dominantKind(hunks),
+      origin,
+      ownerReviews: ownerReviews || [],
+      hunks: hunks.map((hunk) => ({ id: hunk.id, kind: hunk.kind, before: hunk.before, after: hunk.after })),
+      memberIds: hunks.map((hunk) => hunk.id),
+      before: beforePassages.length ? { id: firstBefore?.id || null, text: beforeText, index: beforeIndexes[0] ?? null, passages: beforePassages } : null,
+      after: afterPassages.length ? { id: firstAfter?.id || null, text: afterText, index: afterIndexes[0] ?? null, passages: afterPassages } : null,
+      beforeContext: null,
+      afterContext: null,
+      inline: hunks.length === 1 && hunks[0].inline ? hunks[0].inline : null,
+      accepted: false,
+      displayIndex: Math.min(...hunks.map((hunk) => hunk.displayIndex))
+    };
+    return change;
+  }
+
+  function groupAdditionalChanges(changes, beforeContent, afterContent) {
+    if (!changes.length) return [];
+    const sorted = [...changes].sort((left, right) => left.displayIndex - right.displayIndex || (left.before?.index ?? -1) - (right.before?.index ?? -1));
+    const groups = [];
+    let current = [sorted[0]];
+    for (let index = 1; index < sorted.length; index += 1) {
+      const prev = current[current.length - 1];
+      const next = sorted[index];
+      const prevBounds = clusterBounds(current);
+      const nextIndexes = changeIndexes(next);
+      const nearBefore = prevBounds.maxBefore != null && nextIndexes.before != null && nextIndexes.before - prevBounds.maxBefore <= ADDITIONAL_CLUSTER_GAP;
+      const nearAfter = prevBounds.maxAfter != null && nextIndexes.after != null && nextIndexes.after - prevBounds.maxAfter <= ADDITIONAL_CLUSTER_GAP;
+      const nearDisplay = next.displayIndex - prev.displayIndex <= ADDITIONAL_CLUSTER_GAP;
+      if (nearBefore || nearAfter || nearDisplay) current.push(next);
+      else { groups.push(current); current = [next]; }
+    }
+    groups.push(current);
+    return groups.map((hunks) => makeGroupedChange({
+      id: hunks.length === 1 ? hunks[0].id : `additional:${hunks.map((hunk) => hunk.id).join("+")}`,
+      origin: "additional_revision",
+      ownerReviews: [],
+      hunks,
+      beforeContent,
+      afterContent
+    }));
+  }
+
   function linkOwnerReviewToChanges(changes, annotations, beforeContent, afterContent) {
     const before = Array.isArray(beforeContent) ? beforeContent : [];
     const after = Array.isArray(afterContent) ? afterContent : [];
-    const notes = Array.isArray(annotations) ? annotations : [];
+    const notes = Array.isArray(annotations) ? annotations.filter((note) => note && note.target !== "chapter_title") : [];
     const unchangedBefore = new Set();
     const unchangedAfterByBeforeId = new Map();
     const exactPairs = longestCommonSubsequence(before, after, (left, right) => normalizeText(left.text) === normalizeText(right.text));
@@ -203,46 +421,66 @@
       unchangedBefore.add(before[beforeIndex].id);
       unchangedAfterByBeforeId.set(before[beforeIndex].id, after[afterIndex]);
     }
-    const byBeforeId = new Map();
-    for (const change of changes) {
-      if (!change.before?.id) continue;
-      if (!byBeforeId.has(change.before.id)) byBeforeId.set(change.before.id, []);
-      byBeforeId.get(change.before.id).push(change);
-    }
+
+    const exactBeforeIndexes = new Set(exactPairs.map((pair) => pair[0]));
+    const exactAfterIndexes = new Set(exactPairs.map((pair) => pair[1]));
+
+    const claimed = new Set();
+    const ownerCards = [];
     const unmatchedReviewItems = [];
-    for (const annotation of notes) {
-      if (annotation?.target === "chapter_title") continue;
-      const linked = byBeforeId.get(annotation.paragraphId) || [];
-      if (linked.length) {
-        for (const change of linked) {
-          change.ownerReviews.push(annotation);
-          change.origin = "owner_requested";
+    const notesByPosition = [...notes].sort((left, right) => {
+      const leftIndex = before.findIndex((paragraph) => paragraph.id === left.paragraphId);
+      const rightIndex = before.findIndex((paragraph) => paragraph.id === right.paragraphId);
+      return (leftIndex < 0 ? Infinity : leftIndex) - (rightIndex < 0 ? Infinity : rightIndex);
+    });
+
+    for (const annotation of notesByPosition) {
+      const foreignAnchors = new Set(
+        notesByPosition
+          .filter((note) => note.id !== annotation.id && note.paragraphId)
+          .map((note) => note.paragraphId)
+      );
+      const seeds = seedsForAnnotation(annotation, changes, before).filter((change) => !claimed.has(change.id));
+      if (!seeds.length) {
+        if (unchangedBefore.has(annotation.paragraphId)) {
+          const beforeParagraph = before.find((paragraph) => paragraph.id === annotation.paragraphId);
+          const afterParagraph = unchangedAfterByBeforeId.get(annotation.paragraphId);
+          unmatchedReviewItems.push({
+            id: `unmatched:${annotation.id}`,
+            kind: "unchanged",
+            reason: "no_detectable_text_change",
+            annotation,
+            before: beforeParagraph ? { id: beforeParagraph.id, text: beforeParagraph.text, index: before.indexOf(beforeParagraph) } : null,
+            after: afterParagraph ? { id: afterParagraph.id, text: afterParagraph.text, index: after.indexOf(afterParagraph) } : null
+          });
+        } else {
+          unmatchedReviewItems.push({
+            id: `unmatched:${annotation.id}`,
+            kind: "unmapped",
+            reason: "no_detectable_text_change",
+            annotation,
+            before: null,
+            after: null
+          });
         }
         continue;
       }
-      if (unchangedBefore.has(annotation.paragraphId)) {
-        const beforeParagraph = before.find((paragraph) => paragraph.id === annotation.paragraphId);
-        const afterParagraph = unchangedAfterByBeforeId.get(annotation.paragraphId);
-        unmatchedReviewItems.push({
-          id: `unmatched:${annotation.id}`,
-          kind: "unchanged",
-          reason: "no_detectable_text_change",
-          annotation,
-          before: beforeParagraph ? { id: beforeParagraph.id, text: beforeParagraph.text, index: before.indexOf(beforeParagraph) } : null,
-          after: afterParagraph ? { id: afterParagraph.id, text: afterParagraph.text, index: after.indexOf(afterParagraph) } : null
-        });
-      } else {
-        unmatchedReviewItems.push({
-          id: `unmatched:${annotation.id}`,
-          kind: "unmapped",
-          reason: "no_detectable_text_change",
-          annotation,
-          before: null,
-          after: null
-        });
-      }
+      const cluster = expandOwnerCluster(seeds, changes, claimed, foreignAnchors, exactBeforeIndexes, exactAfterIndexes);
+      for (const change of cluster) claimed.add(change.id);
+      ownerCards.push(makeGroupedChange({
+        id: `owner:${annotation.id}`,
+        origin: "owner_requested",
+        ownerReviews: [annotation],
+        hunks: cluster,
+        beforeContent: before,
+        afterContent: after
+      }));
     }
-    return { changes, unmatchedReviewItems };
+
+    const leftover = changes.filter((change) => !claimed.has(change.id));
+    const additionalCards = groupAdditionalChanges(leftover, before, after);
+    const grouped = [...ownerCards, ...additionalCards].sort((left, right) => left.displayIndex - right.displayIndex || String(left.id).localeCompare(String(right.id)));
+    return { changes: grouped, unmatchedReviewItems };
   }
 
   function isChapterTitleAnnotation(note) {

@@ -89,15 +89,18 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /"New Version"/);
   assert.match(script, /"Old Version"/);
   assert.match(script, /"Owner Review Note"/);
+  assert.match(script, /origin === "owner_requested" \? "Revision"/);
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
   assert.match(script, /revision-owner-anchor/);
   assert.match(script, /revision-kind-badge/);
+  assert.match(script, /revision-passage-block/);
   assert.doesNotMatch(script, /Change \$\{index \+ 1\} ·/);
   assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:1fr 1fr/);
   assert.match(css, /@media\(max-width:48rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
   assert.match(css, /\.revision-owner-note\{/);
   assert.match(css, /\.revision-owner-anchor\{/);
+  assert.match(css, /\.revision-passage-block\{/);
 });
 
 test("revision comparison layout prefers New left / Old right with stacked mobile order", () => {

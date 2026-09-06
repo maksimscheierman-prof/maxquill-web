@@ -73,6 +73,7 @@ test("owner review item links to the resulting change", () => {
   const model = diff.buildRevisionReviewModel(before, after, ownerReview);
   assert.equal(model.changes.length, 1);
   assert.equal(model.changes[0].origin, "owner_requested");
+  assert.equal(model.changes[0].id, "owner:ann-1");
   assert.equal(model.changes[0].ownerReviews[0].id, "ann-1");
   assert.equal(model.changes[0].kind, "removed");
   assert.equal(model.unmatchedReviewItems.length, 0);
@@ -87,7 +88,8 @@ test("unrelated reviser change is still shown", () => {
   assert.equal(model.summary.additional, 1);
   const extra = model.changes.find((change) => change.origin === "additional_revision");
   assert.equal(extra.kind, "inserted");
-  assert.equal(extra.after.text, "Unexpected extra beat.");
+  assert.match(extra.after.text, /Unexpected extra beat\./);
+  assert.ok(extra.after.passages.some((passage) => passage.text === "Unexpected extra beat." && passage.changed));
 });
 
 test("no-change review item is detectable", () => {
@@ -221,19 +223,113 @@ test("grouped rewrite keeps full old and new paragraphs for review", () => {
   };
   const model = diff.buildRevisionReviewModel(before, after, ownerReview);
   assert.equal(model.changes.length, 1);
-  assert.equal(model.changes[0].kind, "changed");
-  assert.equal(model.changes[0].before.text, "Continuity leak: shared sleep chamber.");
-  assert.equal(model.changes[0].after.text, "The door opened without warning.");
+  assert.equal(model.changes[0].id, "owner:ann-1");
+  assert.equal(model.changes[0].origin, "owner_requested");
+  assert.match(model.changes[0].before.text, /Continuity leak: shared sleep chamber\./);
+  assert.match(model.changes[0].after.text, /The door opened without warning\./);
+  assert.ok(model.changes[0].before.passages.some((passage) => passage.text === "Keep me." && !passage.changed));
+  assert.ok(model.changes[0].before.passages.some((passage) => passage.text === "Keep too." && !passage.changed));
   assert.equal(model.changes[0].ownerReviews[0].category, "continuity");
   assert.equal(model.changes[0].ownerReviews[0].comment, "This implies Lyra sleeps in the same room as Kael and Tarin.");
   const ranges = revision.ownerSelectedRanges(model.changes[0].before.text, model.changes[0].ownerReviews);
-  assert.deepEqual(ranges, [{ start: "Continuity leak: ".length, end: "Continuity leak: shared sleep chamber".length }]);
+  assert.equal(ranges.length, 1);
+  assert.equal(model.changes[0].before.text.slice(ranges[0].start, ranges[0].end), "shared sleep chamber");
   const layout = revision.revisionComparisonLayout();
   assert.deepEqual(layout.desktopColumns, ["new", "old"]);
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
   assert.equal(layout.labels.new, "New Version");
   assert.equal(layout.labels.old, "Old Version");
   assert.equal(layout.labels.ownerNote, "Owner Review Note");
+});
+
+test("CH001 Lyra continuity note groups multiple adjacent hunks into one card", () => {
+  const lyraQuote = "Lyra, on the far side of the room, made a small sound that might have been a laugh if she wanted to flatter Tarin. She had one knee up under the blanket and was already tying back her hair with practiced fingers. Even half-dressed and still groggy, she looked more awake than the rest of them put together.";
+  const before = pkg(1, [
+    paragraph("p004", "Boots on the floorboards. Miss Maera’s brisk voice stayed ordinary."),
+    paragraph("p005", "“Finally,” a voice said from the next pallet over. Tarin was already sitting up, hair sticking out in every direction."),
+    paragraph("p006", "Kael blinked at him. “That’s not how dying works.”"),
+    paragraph("p007", "“It is if you refuse food long enough.”"),
+    paragraph("p008", lyraQuote),
+    paragraph("p009", "“Move,” she said, and tossed Kael his shirt."),
+    paragraph("p010", "He caught it one-handed and sat up. The room around them held the rest of the morning."),
+    paragraph("p040", "Bridge paragraph stays the same in both versions."),
+    paragraph("p050", "Later, the overlook was quiet.")
+  ]);
+  const after = pkg(2, [
+    paragraph("p004", "Boots on the floorboards. Miss Maera’s brisk voice stayed ordinary."),
+    paragraph("p005", "The door opened without warning."),
+    paragraph("p006", "Lyra stepped into the room, already tying back her hair with practiced fingers. She looked as though she had been awake for an hour rather than a few minutes."),
+    paragraph("p007", "She glanced from Kael to Tarin."),
+    paragraph("p008", "“Are you two actually getting up?”"),
+    paragraph("p009", "Tarin, already half-sitting, pulled the blanket higher. “We were considering it.”"),
+    paragraph("p010", "Lyra made a small sound that might have been a laugh if she wanted to flatter him."),
+    paragraph("p011", "Kael blinked at the two of them, then at the narrow room around them."),
+    paragraph("p012", "He caught his shirt one-handed and sat up. The room around them held the rest of the morning."),
+    paragraph("p040", "Bridge paragraph stays the same in both versions."),
+    paragraph("p050", "Later, the overlook was rewritten for an unrelated polish.")
+  ]);
+  const ownerReview = {
+    annotations: [
+      note(
+        "ann-lyra",
+        "p008",
+        lyraQuote,
+        "This implies Lyra sleeps in the same room as Kael and Tarin. She should have a separate girls’ sleeping room. Have her enter the boys’ room instead.",
+        "continuity"
+      )
+    ]
+  };
+  const rawHunks = diff.diffParagraphs(before.content, after.content);
+  assert.ok(rawHunks.length >= 3, `expected multiple raw hunks, got ${rawHunks.length}`);
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  const ownerCards = model.changes.filter((change) => change.origin === "owner_requested");
+  const additionalCards = model.changes.filter((change) => change.origin === "additional_revision");
+  assert.equal(ownerCards.length, 1);
+  assert.equal(ownerCards[0].id, "owner:ann-lyra");
+  assert.equal(ownerCards[0].ownerReviews.length, 1);
+  assert.equal(ownerCards[0].ownerReviews[0].id, "ann-lyra");
+  assert.ok(ownerCards[0].memberIds.length >= 3);
+  assert.match(ownerCards[0].after.text, /The door opened without warning\./);
+  assert.match(ownerCards[0].after.text, /Lyra stepped into the room/);
+  assert.match(ownerCards[0].after.text, /Are you two actually getting up/);
+  assert.match(ownerCards[0].before.text, /Lyra, on the far side of the room/);
+  assert.ok(ownerCards[0].before.passages.some((passage) => !passage.changed), "old block includes neighbor context");
+  assert.ok(ownerCards[0].after.passages.some((passage) => !passage.changed), "new block includes neighbor context");
+  const ranges = revision.ownerSelectedRanges(ownerCards[0].before.text, ownerCards[0].ownerReviews);
+  assert.equal(ranges.length, 1);
+  assert.equal(ownerCards[0].before.text.slice(ranges[0].start, ranges[0].end), lyraQuote);
+  const accepted = revision.applyAccepted(model, [ownerCards[0].id]);
+  assert.equal(accepted.changes.find((change) => change.id === "owner:ann-lyra").accepted, true);
+  assert.equal(accepted.summary.accepted, 1);
+  assert.ok(additionalCards.length >= 1);
+  assert.ok(additionalCards.every((change) => !change.ownerReviews.some((note) => note.id === "ann-lyra")));
+  assert.equal(revision.changeCardCount(model), model.changes.length + model.unmatchedReviewItems.length);
+  assert.ok(revision.changeCardCount(model) < rawHunks.length + 1);
+});
+
+test("distant unrelated changes are not absorbed into an owner review card", () => {
+  const before = pkg(1, [
+    paragraph("p001", "Alpha opening."),
+    paragraph("p002", "Anchor sentence about Lyra sleeping here."),
+    paragraph("p003", "Alpha close."),
+    paragraph("p020", "Far away unchanged bridge."),
+    paragraph("p021", "Distant old line.")
+  ]);
+  const after = pkg(2, [
+    paragraph("p001", "Alpha opening."),
+    paragraph("p002", "The door opened without warning."),
+    paragraph("p003", "Alpha close."),
+    paragraph("p020", "Far away unchanged bridge."),
+    paragraph("p021", "Distant rewritten line.")
+  ]);
+  const ownerReview = { annotations: [note("ann-near", "p002", "Lyra sleeping here", "Fix the room continuity.", "continuity")] };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  assert.equal(model.changes.filter((change) => change.origin === "owner_requested").length, 1);
+  assert.equal(model.changes.filter((change) => change.origin === "additional_revision").length, 1);
+  assert.equal(model.changes[0].id, "owner:ann-near");
+  assert.match(model.changes[0].after.text, /The door opened without warning\./);
+  assert.doesNotMatch(model.changes[0].after.text, /Distant rewritten line/);
+  assert.match(model.changes[1].after.text, /Distant rewritten line/);
 });
 
 test("true standalone insertion still works after rewrite grouping", () => {

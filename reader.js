@@ -111,21 +111,52 @@
     }
     if (cursor < text.length) target.append(document.createTextNode(text.slice(cursor)));
   }
+  function appendPassageBlock(side, passages, label, ownerReviews, inlineTokens) {
+    if (!passages?.length) {
+      side.append(node("p", "revision-empty", "[none]"));
+      return;
+    }
+    const block = node("div", "revision-passage-block");
+    const joined = passages.map((passage) => passage.text).join("\n\n");
+    const ownerRanges = label === "Old Version" ? MaxQuillRevisionReview.ownerSelectedRanges(joined, ownerReviews) : [];
+    let cursor = 0;
+    for (const passage of passages) {
+      const body = node("p", `revision-passage${passage.changed ? " is-changed" : " is-context"}`);
+      if (passage.id && label === "New Version") {
+        body.id = `paragraph-${passage.id}`;
+        body.dataset.paragraphId = passage.id;
+      }
+      const start = joined.indexOf(passage.text, cursor);
+      const end = start >= 0 ? start + passage.text.length : -1;
+      if (start >= 0) cursor = end;
+      const localOwner = ownerRanges
+        .filter((range) => start >= 0 && range.end > start && range.start < end)
+        .map((range) => ({ start: Math.max(0, range.start - start), end: Math.min(passage.text.length, range.end - start) }));
+      if (localOwner.length) appendMarkedText(body, passage.text, localOwner, "revision-owner-anchor");
+      else if (passages.length === 1 && inlineTokens?.length) renderPassage(body, passage.text, inlineTokens, label === "New Version" ? "inserted" : "removed");
+      else body.textContent = passage.text;
+      block.append(body);
+    }
+    side.append(block);
+  }
   function appendSide(parent, label, passage, context, tokens, keep, paragraphId, ownerReviews) {
     const side = node("div", `revision-side revision-side-${label === "New Version" ? "new" : "old"}`);
     side.append(node("span", "revision-side-label", label));
-    const showContext = Boolean(context?.previous || context?.next) && passage && passage.text.length > 420;
-    if (showContext && context?.previous) side.append(node("p", "revision-context", `[…] ${context.previous}`));
-    if (!passage) side.append(node("p", "revision-empty", "[none]"));
+    if (passage?.passages?.length) appendPassageBlock(side, passage.passages, label, ownerReviews, tokens);
     else {
-      const body = node("p", "revision-passage");
-      if (paragraphId) { body.id = `paragraph-${paragraphId}`; body.dataset.paragraphId = paragraphId; }
-      const ownerRanges = label === "Old Version" ? MaxQuillRevisionReview.ownerSelectedRanges(passage.text, ownerReviews) : [];
-      if (ownerRanges.length) appendMarkedText(body, passage.text, ownerRanges, "revision-owner-anchor");
-      else renderPassage(body, passage.text, tokens, keep);
-      side.append(body);
+      const showContext = Boolean(context?.previous || context?.next) && passage && passage.text.length > 420;
+      if (showContext && context?.previous) side.append(node("p", "revision-context", `[…] ${context.previous}`));
+      if (!passage) side.append(node("p", "revision-empty", "[none]"));
+      else {
+        const body = node("p", "revision-passage");
+        if (paragraphId) { body.id = `paragraph-${paragraphId}`; body.dataset.paragraphId = paragraphId; }
+        const ownerRanges = label === "Old Version" ? MaxQuillRevisionReview.ownerSelectedRanges(passage.text, ownerReviews) : [];
+        if (ownerRanges.length) appendMarkedText(body, passage.text, ownerRanges, "revision-owner-anchor");
+        else renderPassage(body, passage.text, tokens, keep);
+        side.append(body);
+      }
+      if (showContext && context?.next) side.append(node("p", "revision-context", `${context.next} […]`));
     }
-    if (showContext && context?.next) side.append(node("p", "revision-context", `${context.next} […]`));
     parent.append(side);
   }
   function appendOwnerReviews(card, reviews) {
@@ -153,10 +184,11 @@
     const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${change.accepted ? " is-accepted" : ""}`);
     card.dataset.changeId = change.id;
     const header = node("div", "revision-change-header");
-    header.append(node("p", "revision-kicker", options.title || "Revision"));
+    const title = options.title || (change.origin === "owner_requested" ? "Revision" : "Additional revision change");
+    header.append(node("p", "revision-kicker", title));
     header.append(node("span", "revision-kind-badge", kindLabel(change.kind)));
     card.append(header);
-    card.append(node("p", "revision-origin", originLabel(change.origin)));
+    if (change.origin === "additional_revision") card.append(node("p", "revision-origin", originLabel(change.origin)));
     const pair = node("div", "revision-pair");
     appendSide(pair, "New Version", change.after, change.afterContext, change.inline, "inserted", change.after?.id || null, null);
     appendSide(pair, "Old Version", change.before, change.beforeContext, change.inline, "removed", null, change.ownerReviews);
