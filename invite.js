@@ -148,7 +148,8 @@
   }
 
   function readSelectionState() {
-    if (document.querySelector("#annotation-dialog").open || document.querySelector("#review-panel").open || finished) {
+    if (document.querySelector("#annotation-dialog").open) return;
+    if (document.querySelector("#review-panel").open || finished) {
       hideSelectionActions(true);
       return;
     }
