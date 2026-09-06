@@ -1,5 +1,6 @@
 const OWNER_FIELDS = ["schemaVersion", "type", "source", "bookId", "chapterId", "chapterNumber", "chapterVersion", "reviewedAt", "reviewStatus", "annotations"];
 const ANNOTATION_FIELDS = ["id", "paragraphId", "selectedText", "selectionStart", "selectionEnd", "category", "comment", "status", "requiresCanonChange"];
+const TITLE_ANNOTATION_FIELDS = ["id", "target", "selectedText", "category", "comment", "status", "requiresCanonChange"];
 const REVIEW_READY_FIELDS = ["schemaVersion", "type", "bookId", "chapterId", "chapterNumber", "chapterVersion", "status", "title", "exportedAt", "content"];
 const PARAGRAPH_FIELDS = ["id", "text"];
 const CATEGORIES = new Set(["wording", "clarity", "pacing", "dialogue", "continuity", "canon", "style", "other"]);
@@ -24,6 +25,13 @@ export function validateOwnerReview(pkg) {
   else {
     const ids = new Set();
     for (const note of pkg.annotations) {
+      if (note?.target === "chapter_title") {
+        if (!exactFields(note, TITLE_ANNOTATION_FIELDS, errors)) continue;
+        if (typeof note.id !== "string" || !note.id.trim() || ids.has(note.id)) errors.push("Annotation IDs must be non-empty and unique."); else ids.add(note.id);
+        if (typeof note.selectedText !== "string" || !note.selectedText) errors.push("Invalid annotation selection.");
+        if (!CATEGORIES.has(note.category) || typeof note.comment !== "string" || !note.comment.trim() || !NOTE_STATUSES.has(note.status) || typeof note.requiresCanonChange !== "boolean") errors.push("Invalid annotation values.");
+        continue;
+      }
       if (!exactFields(note, ANNOTATION_FIELDS, errors)) continue;
       if (typeof note.id !== "string" || !note.id.trim() || ids.has(note.id)) errors.push("Annotation IDs must be non-empty and unique."); else ids.add(note.id);
       if (!/^p\d{3}$/.test(note.paragraphId || "") || typeof note.selectedText !== "string" || !note.selectedText || !Number.isInteger(note.selectionStart) || note.selectionStart < 0 || !Number.isInteger(note.selectionEnd) || note.selectionEnd <= note.selectionStart || note.selectionEnd - note.selectionStart !== note.selectedText.length) errors.push("Invalid annotation selection.");

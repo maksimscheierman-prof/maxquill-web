@@ -191,6 +191,35 @@ test("accept tracking is local session state and does not alter the model ids", 
   assert.equal(model.changes[0].accepted, false);
 });
 
+test("Changes view shows Before/After for a chapter title change", () => {
+  const before = pkg(1, [paragraph("p001", "Same body.")], "The Old Storyteller");
+  const after = pkg(2, [paragraph("p001", "Same body.")], "The Named Door");
+  const ownerReview = { annotations: [{ id: "title-1", target: "chapter_title", selectedText: "The Old Storyteller", category: "other", comment: 'Change chapter title to "The Named Door"', status: "open", requiresCanonChange: false }] };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  assert.equal(model.changes.length, 0);
+  assert.equal(model.titleChange.kind, "title");
+  assert.equal(model.titleChange.before.text, "The Old Storyteller");
+  assert.equal(model.titleChange.after.text, "The Named Door");
+  assert.equal(model.titleChange.origin, "owner_requested");
+  assert.equal(model.titleChange.ownerReviews[0].comment, 'Change chapter title to "The Named Door"');
+  assert.equal(model.summary.total, 1);
+  assert.equal(revision.changeCardCount(model), 1);
+  assert.deepEqual(after.content.map((item) => item.id), ["p001"]);
+});
+
+test("old package title notes do not leak into a new package diff", () => {
+  const before = pkg(1, [paragraph("p001", "Same body.")], "Old Title");
+  const after = pkg(2, [paragraph("p001", "Same body.")], "Old Title");
+  const ownerReview = { annotations: [{ id: "title-1", target: "chapter_title", selectedText: "Old Title", category: "other", comment: 'Change chapter title to "X"', status: "open", requiresCanonChange: false }] };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  assert.equal(model.titleChange, null);
+  assert.equal(model.unmatchedReviewItems.length, 1);
+  const next = pkg(3, [paragraph("p001", "Same body.")], "New Title");
+  const isolated = diff.buildRevisionReviewModel(after, next, { annotations: [] });
+  assert.equal(isolated.titleChange.origin, "additional_revision");
+  assert.deepEqual(isolated.titleChange.ownerReviews, []);
+});
+
 test("sixteen owner annotations render as Review Notes, not sixteen reviews", () => {
   assert.equal(revision.reviewNotesLabel(16), "Review Notes (16)");
   assert.doesNotMatch(revision.reviewNotesLabel(16), /16 reviews/i);

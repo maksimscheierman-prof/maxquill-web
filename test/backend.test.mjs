@@ -29,6 +29,17 @@ test("same package and identical review is idempotent", async () => { const serv
 test("different package fingerprints at the same chapter version create separate jobs", async () => { const service = queue(), first = await service.submit(review(), packageA), second = await service.submit(review(), packageB); assert.equal(first.created, true); assert.equal(second.created, true); assert.notEqual(second.job.jobId, first.job.jobId); assert.equal(second.job.status, "QUEUED"); });
 test("same package with a different review conflicts", async () => { const service = queue(); await service.submit(review(), packageA); const changed = review(); changed.annotations[0].comment = "Different."; await expectApi(service.submit(changed, packageA), 409, "REVIEW_PACKAGE_CONFLICT"); });
 test("missing or malformed package fingerprint is rejected", async () => { await expectApi(queue().submit(review()), 400, "INVALID_PACKAGE_FINGERPRINT"); await expectApi(queue().submit(review(), "not-a-hash"), 400, "INVALID_PACKAGE_FINGERPRINT"); });
+test("chapter-title review notes submit without paragraph IDs", async () => {
+  const titleNote = { id: "title-1", target: "chapter_title", selectedText: source.title, category: "other", comment: 'Change chapter title to "The Named Door"', status: "open", requiresCanonChange: false };
+  const pkg = { ...review(), annotations: [titleNote] };
+  assert.equal(validateOwnerReview(pkg).valid, true);
+  const submitted = await queue().submit(pkg, packageA);
+  assert.equal(submitted.created, true);
+  const mixed = { ...review(), annotations: [{ ...note }, titleNote] };
+  assert.equal(validateOwnerReview(mixed).valid, true);
+  const invalid = { ...review(), annotations: [{ ...titleNote, paragraphId: "p001", selectionStart: 0, selectionEnd: 3 }] };
+  assert.equal(validateOwnerReview(invalid).valid, false);
+});
 for (const [name, mutate] of [["unknown top-level field", (pkg) => { pkg.secret = "no"; }], ["invalid category", (pkg) => { pkg.annotations[0].category = "flag"; }], ["empty comment", (pkg) => { pkg.annotations[0].comment = " "; }], ["invalid schemaVersion", (pkg) => { pkg.schemaVersion = 2; }]]) test(`${name} is rejected`, async () => { const pkg = review(); mutate(pkg); assert.equal(validateOwnerReview(pkg).valid, false); await expectApi(queue().submit(pkg, packageA), 400, "INVALID_REVIEW_PACKAGE"); });
 test("oversized bodies are rejected before parsing", async () => { const request = new Request("https://example.test/api/reviews", { method: "POST", headers: { "content-type": "application/json", "content-length": String(MAX_BODY_BYTES + 1) }, body: "{}" }); await expectApi(readJson(request), 413, "PAYLOAD_TOO_LARGE"); });
 test("job lifecycle enforces atomic claim and valid transitions", async () => { const service = queue(), submitted = await service.submit(review(), packageA), id = submitted.job.jobId; assert.equal((await service.claim(id, { workerId: "worker-1" })).status, "CLAIMED"); await expectApi(service.claim(id, { workerId: "worker-2" }), 409, "INVALID_JOB_STATE"); assert.equal((await service.processing(id, { workerId: "worker-1" })).status, "PROCESSING"); assert.equal((await service.result(id, { workerId: "worker-1", reviewReadyPackage: resultPackage() })).status, "REVISION_READY"); await expectApi(service.processing(id, { workerId: "worker-1" }), 409, "INVALID_JOB_STATE"); });

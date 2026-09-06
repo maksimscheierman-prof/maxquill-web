@@ -4,10 +4,40 @@ const demoPath = path.join(__dirname, "..", "content", "books", "demo-book", "re
 const source = JSON.parse(fs.readFileSync(demoPath, "utf8"));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const annotation = { id: "note-1", paragraphId: "p001", selectedText: source.content[0].text.substring(0, 3), selectionStart: 0, selectionEnd: 3, category: "wording", comment: "Revise this opening.", status: "open", requiresCanonChange: false };
-const owner = (annotations = [annotation]) => ({ schemaVersion: 1, type: "owner_review", source: "owner", bookId: source.bookId, chapterId: source.chapterId, chapterNumber: source.chapterNumber, chapterVersion: source.chapterVersion, reviewedAt: "2026-08-27T12:00:00.000Z", reviewStatus: "completed", annotations });
+const owner = (annotations = [annotation]) => ({ schemaVersion: 1, type: "owner_review", source: "owner", bookId: source.bookId, chapterId: source.chapterId, chapterNumber: source.chapterNumber, chapterVersion: source.chapterVersion, reviewedAt: "2026-08-27T12:00:00.000Z", reviewStatus: "completed", annotations: clone(annotations) });
 test("all demo review candidates load and validate with ordered IDs", () => { for (const file of fs.readdirSync(path.dirname(demoPath)).sort()) { const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(demoPath), file), "utf8")); assert.equal(contract.validateReviewReadyPackage(pkg).valid, true, file); assert.deepEqual(pkg.content.map((item) => item.id), pkg.content.map((_, index) => `p${String(index + 1).padStart(3, "0")}`)); } });
 test("valid owner review and empty annotations pass", () => { assert.equal(contract.validateOwnerReviewPackage(owner(), source).valid, true); assert.equal(contract.validateOwnerReviewPackage(owner([]), source).valid, true); });
 const readyCases = [["schemaVersion 2", (p) => { p.schemaVersion = 2; }], ["unknown top-level field", (p) => { p.extra = true; }], ["unknown paragraph field", (p) => { p.content[0].extra = true; }], ["invalid chapterId", (p) => { p.chapterId = "chapter_1"; }], ["duplicate paragraph IDs", (p) => { p.content[1].id = p.content[0].id; }]];
 for (const [name, mutate] of readyCases) test(`rejects REVIEW_READY: ${name}`, () => { const pkg = clone(source); mutate(pkg); assert.equal(contract.validateReviewReadyPackage(pkg).valid, false); });
 const ownerCases = [["invalid category flag", (p) => { p.annotations[0].category = "flag"; }], ["empty comment", (p) => { p.annotations[0].comment = " "; }], ["unknown annotation field", (p) => { p.annotations[0].extra = true; }], ["unknown paragraphId", (p) => { p.annotations[0].paragraphId = "p999"; }], ["selectionStart below zero", (p) => { p.annotations[0].selectionStart = -1; }], ["selectionEnd not after start", (p) => { p.annotations[0].selectionEnd = 0; }], ["selectionEnd beyond paragraph", (p) => { p.annotations[0].selectionEnd = 9999; }], ["selectedText mismatch", (p) => { p.annotations[0].selectedText = "bad"; }], ["requiresCanonChange not boolean", (p) => { p.annotations[0].requiresCanonChange = "false"; }], ["duplicate annotation IDs", (p) => { p.annotations.push(clone(p.annotations[0])); }]];
 for (const [name, mutate] of ownerCases) test(`rejects OWNER_REVIEW: ${name}`, () => { const pkg = owner(); mutate(pkg); assert.equal(contract.validateOwnerReviewPackage(pkg, source).valid, false); });
+
+test("owner can create a chapter-title review note without paragraph IDs", () => {
+  const titleNote = { id: "title-1", target: "chapter_title", selectedText: source.title, category: "other", comment: 'Change chapter title to "The Named Door"', status: "open", requiresCanonChange: false };
+  const pkg = owner([annotation, titleNote]);
+  const result = contract.validateOwnerReviewPackage(pkg, source);
+  assert.equal(result.valid, true, result.errors.join(" "));
+  assert.equal(contract.isChapterTitleAnnotation(titleNote), true);
+  assert.deepEqual(source.content.map((item) => item.id), source.content.map((_, index) => `p${String(index + 1).padStart(3, "0")}`));
+  assert.equal(contract.validateOwnerReviewPackage(owner([annotation]), source).valid, true);
+});
+
+test("chapter-title note survives export and does not leak into another package", () => {
+  const titleNote = { id: "title-1", target: "chapter_title", selectedText: source.title, category: "other", comment: 'Change chapter title to "The Named Door"', status: "open", requiresCanonChange: false };
+  assert.equal(contract.validateOwnerReviewPackage(owner([titleNote]), source).valid, true);
+  const other = clone(source); other.chapterVersion = 2; other.title = "The Named Door";
+  assert.equal(contract.validateOwnerReviewPackage(owner([titleNote]), other).valid, false);
+  const nextTitle = { ...titleNote, selectedText: "The Named Door" };
+  assert.equal(contract.validateOwnerReviewPackage({ ...owner([nextTitle]), chapterVersion: 2 }, other).valid, true);
+  assert.equal(contract.validateOwnerReviewPackage(owner([{ ...titleNote, paragraphId: "p001", selectionStart: 0, selectionEnd: 3 }]), source).valid, false);
+});
+
+test("title notes do not change paragraph IDs or quote offsets", () => {
+  const paragraph = source.content[0];
+  const quote = { id: "quote-1", paragraphId: paragraph.id, selectedText: paragraph.text.substring(0, 3), selectionStart: 0, selectionEnd: 3, category: "wording", comment: "Keep this wording.", status: "open", requiresCanonChange: false };
+  const titleNote = { id: "title-1", target: "chapter_title", selectedText: source.title, category: "other", comment: 'Change chapter title to "The Named Door"', status: "open", requiresCanonChange: false };
+  const result = contract.validateOwnerReviewPackage(owner([quote, titleNote]), source);
+  assert.equal(result.valid, true, result.errors.join(" "));
+  assert.equal(paragraph.text.substring(quote.selectionStart, quote.selectionEnd), quote.selectedText);
+  assert.deepEqual(source.content.map((item) => item.id), source.content.map((_, index) => `p${String(index + 1).padStart(3, "0")}`));
+});

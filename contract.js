@@ -9,8 +9,14 @@
   const PARAGRAPH_FIELDS = ["id", "text"];
   const OWNER_REVIEW_FIELDS = ["schemaVersion", "type", "source", "bookId", "chapterId", "chapterNumber", "chapterVersion", "reviewedAt", "reviewStatus", "annotations"];
   const ANNOTATION_FIELDS = ["id", "paragraphId", "selectedText", "selectionStart", "selectionEnd", "category", "comment", "status", "requiresCanonChange"];
+  const TITLE_ANNOTATION_FIELDS = ["id", "target", "selectedText", "category", "comment", "status", "requiresCanonChange"];
   const CATEGORIES = ["wording", "clarity", "pacing", "dialogue", "continuity", "canon", "style", "other"];
   const ANNOTATION_STATUSES = ["open", "accepted", "rejected", "resolved"];
+  const CHAPTER_TITLE_TARGET = "chapter_title";
+
+  function isChapterTitleAnnotation(value) {
+    return Boolean(value && value.target === CHAPTER_TITLE_TARGET);
+  }
 
   function exactFields(value, allowed, label, errors) {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -73,6 +79,19 @@
       const annotationIds = new Set();
       const paragraphs = new Map((sourcePackage?.content || []).map((paragraph) => [paragraph.id, paragraph.text]));
       pkg.annotations.forEach((annotation, index) => {
+        if (isChapterTitleAnnotation(annotation)) {
+          exactFields(annotation, TITLE_ANNOTATION_FIELDS, `annotations[${index}]`, errors);
+          if (!annotation || typeof annotation !== "object") return;
+          if (typeof annotation.id !== "string" || !annotation.id.trim()) errors.push(`annotations[${index}].id must be non-empty.`);
+          else if (annotationIds.has(annotation.id)) errors.push(`Annotation ID "${annotation.id}" is duplicated.`);
+          else annotationIds.add(annotation.id);
+          if (annotation.selectedText !== sourcePackage?.title) errors.push(`annotations[${index}].selectedText must match the chapter title.`);
+          if (!CATEGORIES.includes(annotation.category)) errors.push(`annotations[${index}].category is invalid.`);
+          if (typeof annotation.comment !== "string" || !annotation.comment.trim()) errors.push(`annotations[${index}].comment must be non-empty.`);
+          if (!ANNOTATION_STATUSES.includes(annotation.status)) errors.push(`annotations[${index}].status is invalid.`);
+          if (typeof annotation.requiresCanonChange !== "boolean") errors.push(`annotations[${index}].requiresCanonChange must be Boolean.`);
+          return;
+        }
         exactFields(annotation, ANNOTATION_FIELDS, `annotations[${index}]`, errors);
         if (!annotation || typeof annotation !== "object") return;
         if (typeof annotation.id !== "string" || !annotation.id.trim()) errors.push(`annotations[${index}].id must be non-empty.`);
@@ -93,5 +112,5 @@
     return result(errors);
   }
 
-  return { CATEGORIES, ANNOTATION_STATUSES, validateReviewReadyPackage, validateOwnerReviewPackage };
+  return { CATEGORIES, ANNOTATION_STATUSES, CHAPTER_TITLE_TARGET, TITLE_ANNOTATION_FIELDS, isChapterTitleAnnotation, validateReviewReadyPackage, validateOwnerReviewPackage };
 });

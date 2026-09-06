@@ -4,6 +4,20 @@ const source = { schemaVersion: 1, type: "review_ready_chapter", bookId: "demo-b
 const review = () => ({ schemaVersion: 1, type: "owner_review", source: "owner", bookId: "demo-book", chapterId: "chapter_0001", chapterNumber: 1, chapterVersion: 1, reviewedAt: "2026-08-28T10:05:00.000Z", reviewStatus: "completed", annotations: [] });
 const response = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
+test("chapter-title note submits in the exact owner-review body", async () => {
+  const titleNote = { id: "title-1", target: "chapter_title", selectedText: source.title, category: "other", comment: 'Change chapter title to "The Named Door"', status: "open", requiresCanonChange: false };
+  const pkg = { ...review(), annotations: [titleNote] };
+  let request;
+  const job = await api.submitOwnerReview(pkg, source, async (_url, options) => { request = options; return response(201, { jobId: "job-title", status: "QUEUED", bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 1 }); }, contract);
+  assert.deepEqual(JSON.parse(request.body).annotations[0], titleNote);
+  assert.equal(job.status, "QUEUED");
+});
+test("title notes stay isolated by package fingerprint", async () => {
+  const v1 = await api.packageIdentity(source);
+  const v2 = await api.packageIdentity({ ...source, chapterVersion: 2, title: "Two" });
+  assert.notEqual(v1.packageFingerprint, v2.packageFingerprint);
+  assert.notEqual(api.reviewStorageKey(v1), api.reviewStorageKey(v2));
+});
 test("valid completed review submits exact package and returns a persistable queued job", async () => {
   let request; const pkg = review(); const job = await api.submitOwnerReview(pkg, source, async (url, options) => { request = { url, options }; return response(201, { jobId: "job-1", status: "QUEUED", bookId: "demo-book", chapterId: "chapter_0001", chapterVersion: 1 }); }, contract);
   assert.equal(request.url, "/api/reviews"); assert.equal(request.options.method, "POST"); assert.deepEqual(JSON.parse(request.options.body), pkg); assert.equal(request.options.headers["Content-Type"], "application/json"); assert.equal(request.options.headers["X-MaxQuill-Package-Fingerprint"], job.packageFingerprint); assert.equal(job.status, "QUEUED"); assert.ok(job.submittedAt); assert.match(job.packageFingerprint, /^[a-f0-9]{64}$/); assert.equal(api.jobStorageKey(job), `maxquill.review-job.demo-book.chapter_0001.v1.${job.packageFingerprint}`);

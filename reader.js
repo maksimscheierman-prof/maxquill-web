@@ -19,6 +19,21 @@
   function showingChanges() { return Boolean(revisionContext && revisionContext.session.viewMode === "changes"); }
   function showingOriginalNotes() { return Boolean(revisionContext && revisionContext.session.viewMode === "notes"); }
   function originalNotes() { return revisionContext?.ownerReview?.annotations || []; }
+  function displayTitle() { return showingOriginalNotes() ? revisionContext.beforePackage.title : sourcePackage.title; }
+  function refreshChapterTitle() {
+    const heading = document.querySelector("#chapter-title");
+    if (heading) heading.textContent = displayTitle();
+    const actions = document.querySelector("#chapter-title-review");
+    if (!actions) return;
+    const reviewMode = document.documentElement.dataset.readerMode === "review";
+    actions.hidden = !reviewMode || showingChanges() || showingOriginalNotes();
+  }
+  function openTitleEditor(existing = null, preset = "") {
+    if (showingOriginalNotes()) { document.querySelector("#review-panel").showModal(); return; }
+    pendingSelection = { target: "chapter_title", selectedText: sourcePackage.title };
+    openEditor(existing, "other");
+    if (preset && !existing) document.querySelector("#annotation-comment").value = preset;
+  }
   function setRevisionView(mode) {
     if (!revisionContext) return;
     revisionContext.session = MaxQuillRevisionReview.setViewMode(revisionContext.session, mode);
@@ -84,7 +99,7 @@
     }
     if (!target.childNodes.length) target.textContent = text || "";
   }
-  function kindLabel(kind) { return { changed: "Changed", removed: "Removed", inserted: "Inserted", moved: "Moved", unchanged: "Unchanged" }[kind] || kind; }
+  function kindLabel(kind) { return { changed: "Changed", removed: "Removed", inserted: "Inserted", moved: "Moved", unchanged: "Unchanged", title: "Chapter title", title_unchanged: "Chapter title" }[kind] || kind; }
   function originLabel(origin) { return origin === "owner_requested" ? "Owner-requested change" : "Additional revision change"; }
   function appendSide(parent, label, passage, context, tokens, keep, paragraphId) {
     const side = node("div", "revision-side");
@@ -114,6 +129,10 @@
     return null;
   }
   function commentOnChange(change, category = "wording", preset = "") {
+    if (change?.kind === "title" || change?.kind === "title_unchanged" || change?.annotation?.target === "chapter_title") {
+      openTitleEditor(null, preset);
+      return;
+    }
     const paragraph = changeParagraph(change) || (change.after ? { id: change.after.id, text: change.after.text } : null);
     if (!paragraph) { showMessage("#selection-message", "Open the full chapter to comment near this removal."); return; }
     const candidate = { paragraphId: paragraph.id, startParagraphId: paragraph.id, endParagraphId: paragraph.id, selectedText: paragraph.text, selectionStart: 0, selectionEnd: paragraph.text.length };
@@ -129,7 +148,10 @@
   }
   function acceptAllChanges() {
     if (!revisionContext) return;
-    revisionContext.session = MaxQuillRevisionReview.acceptAll(revisionContext.session, (revisionContext.model?.changes || []).map((change) => change.id));
+    revisionContext.session = MaxQuillRevisionReview.acceptAll(revisionContext.session, [
+      ...(revisionContext.model?.titleChange ? [revisionContext.model.titleChange.id] : []),
+      ...(revisionContext.model?.changes || []).map((change) => change.id)
+    ]);
     saveRevisionSession(); refreshRevisionModel(); renderChapterBody(); updateReviewUi();
   }
   function renderRevisionChanges() {
@@ -138,13 +160,30 @@
     const model = revisionContext.model, toolbar = node("div", "revision-toolbar"), summary = node("p");
     summary.textContent = `${model.summary.total} ${model.summary.total === 1 ? "change" : "changes"} · ${model.summary.ownerRequested} owner-requested · ${model.summary.additional} additional${model.summary.unmatched ? ` · ${model.summary.unmatched} with no detectable text change` : ""}`;
     toolbar.append(summary);
-    if (model.changes.length) {
+    if (model.changes.length || model.titleChange) {
       const acceptAll = node("button", "", "Accept All"); acceptAll.type = "button"; acceptAll.addEventListener("click", acceptAllChanges); toolbar.append(acceptAll);
     }
     body.append(toolbar);
-    if (!model.changes.length && !model.unmatchedReviewItems.length) {
+    if (!model.changes.length && !model.unmatchedReviewItems.length && !model.titleChange) {
       body.append(node("p", "revision-empty", "No detectable text changes. View the full chapter to read the revised version."));
       return;
+    }
+    if (model.titleChange) {
+      const change = model.titleChange;
+      const card = node("article", `revision-change revision-title${change.accepted ? " is-accepted" : ""}`);
+      card.dataset.changeId = change.id;
+      card.append(node("p", "revision-kicker", "Chapter title"));
+      card.append(node("p", "revision-origin", originLabel(change.origin)));
+      appendOwnerReviews(card, change.ownerReviews);
+      const pair = node("div", "revision-pair");
+      appendSide(pair, "Before", change.before, null, change.inline, "removed", null);
+      appendSide(pair, "After", change.after, null, change.inline, "inserted", null);
+      card.append(pair);
+      const actions = node("div", "revision-actions");
+      const accept = node("button", change.accepted ? "is-accepted" : "", change.accepted ? "Accepted" : "Accept"); accept.type = "button"; accept.dataset.changeAction = "accept"; accept.addEventListener("click", () => acceptChange(change.id));
+      const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(change));
+      const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(change, "other", "Flagged for revision."));
+      actions.append(accept, comment, flag); card.append(actions); body.append(card);
     }
     model.changes.forEach((change, index) => {
       const card = node("article", `revision-change${change.accepted ? " is-accepted" : ""}`);
@@ -164,12 +203,13 @@
     });
     model.unmatchedReviewItems.forEach((item, index) => {
       const card = node("article", "revision-change");
-      card.append(node("p", "revision-kicker", `Review item ${index + 1}`));
+      const titleItem = item.kind === "title_unchanged" || item.annotation?.target === "chapter_title";
+      card.append(node("p", "revision-kicker", titleItem ? "Chapter title" : `Review item ${index + 1}`));
       card.append(node("p", "revision-alert", "Review item produced no detectable text change"));
       appendOwnerReviews(card, item.annotation ? [item.annotation] : []);
       if (item.after) {
         const pair = node("div", "revision-pair");
-        appendSide(pair, "Current text", item.after, null, null, null, item.after.id);
+        appendSide(pair, titleItem ? "Current title" : "Current text", item.after, null, null, null, item.after.id);
         card.append(pair);
         const actions = node("div", "revision-actions");
         const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(item));
@@ -183,6 +223,7 @@
     if (showingChanges()) renderRevisionChanges();
     else if (showingOriginalNotes()) renderParagraphs(revisionContext.beforePackage, originalNotes());
     else renderParagraphs();
+    refreshChapterTitle();
   }
 
   function applyPreferences(preferences) {
@@ -203,7 +244,7 @@
     document.documentElement.dataset.readerMode = next; writeStorage(MODE_KEY, next);
     document.querySelectorAll("[data-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === next)));
     document.querySelector("#review-bar").hidden = next !== "review"; hideSelectionActions(true); showMessage("#selection-message", "");
-    window.getSelection()?.removeAllRanges(); renderChapterBody();
+    window.getSelection()?.removeAllRanges(); renderChapterBody(); refreshChapterTitle();
   }
   function setupModes() { document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode))); setMode(readStorage(MODE_KEY, "read")); }
   function navMarkup(position) {
@@ -211,8 +252,8 @@
     return `<nav class="reader-nav ${position}" aria-label="${position === "top" ? "Chapter navigation" : "End of chapter navigation"}">${previous ? `<a class="nav-link previous" href="${chapterUrl(previous)}">&larr; Previous chapter</a>` : '<span class="nav-link previous disabled" aria-hidden="true">Previous</span>'}<a class="nav-link back" href="book.html?book=${encodeURIComponent(book.id)}">Back to book</a>${next ? `<a class="nav-link next" data-next-chapter href="${chapterUrl(next)}">Next chapter &rarr;</a>` : '<span class="nav-link next disabled" aria-hidden="true">Next</span>'}</nav>`;
   }
   function renderReader() {
-    document.querySelector("#reader-content").innerHTML = `${navMarkup("top")}<article class="chapter-article" aria-labelledby="chapter-title"><header class="chapter-heading"><p class="eyebrow">Chapter ${sourcePackage.chapterNumber}</p><h1 id="chapter-title"></h1><p class="chapter-review-status">${chapterStatusLine()}</p></header><div class="chapter-body" id="chapter-body"></div></article>${navMarkup("bottom")}`;
-    document.querySelector("#chapter-title").textContent = sourcePackage.title; renderChapterBody();
+    document.querySelector("#reader-content").innerHTML = `${navMarkup("top")}<article class="chapter-article" aria-labelledby="chapter-title"><header class="chapter-heading"><p class="eyebrow">Chapter ${sourcePackage.chapterNumber}</p><h1 id="chapter-title"></h1><div class="chapter-title-review" id="chapter-title-review" hidden><button type="button" id="comment-chapter-title">Comment</button><button type="button" id="suggest-chapter-title">Suggest change</button></div><p class="chapter-review-status">${chapterStatusLine()}</p></header><div class="chapter-body" id="chapter-body"></div></article>${navMarkup("bottom")}`;
+    refreshChapterTitle(); renderChapterBody();
   }
   function appendHighlightedText(paragraph, item, annotations) {
     const usable = [...annotations].sort((a, b) => a.selectionStart - b.selectionStart).filter((note, index, all) => !all[index - 1] || note.selectionStart >= all[index - 1].selectionEnd); let cursor = 0;
@@ -221,7 +262,7 @@
   }
   function renderParagraphs(pkg = sourcePackage, annotations = review?.annotations || []) {
     const body = document.querySelector("#chapter-body"); if (!body || !pkg) return; body.replaceChildren(); const reviewMode = document.documentElement.dataset.readerMode === "review";
-    for (const item of pkg.content) { const paragraph = document.createElement("p"); paragraph.id = `paragraph-${item.id}`; paragraph.dataset.paragraphId = item.id; const notes = reviewMode ? annotations.filter((note) => note.paragraphId === item.id && note.status === "open") : []; if (notes.length) appendHighlightedText(paragraph, item, notes); else paragraph.textContent = item.text; body.append(paragraph); }
+    for (const item of pkg.content) { const paragraph = document.createElement("p"); paragraph.id = `paragraph-${item.id}`; paragraph.dataset.paragraphId = item.id; const notes = reviewMode ? annotations.filter((note) => note.paragraphId === item.id && note.status === "open" && Number.isInteger(note.selectionStart)) : []; if (notes.length) appendHighlightedText(paragraph, item, notes); else paragraph.textContent = item.text; body.append(paragraph); }
   }
   function selectionDetails() {
     if (showingOriginalNotes()) return null;
@@ -248,16 +289,22 @@
   function openEditor(note = null, defaultCategory = "wording") {
     if (showingOriginalNotes()) { document.querySelector("#review-panel").showModal(); return; }
     editingId = note?.id || null; const source = note || pendingSelection; if (!source) return; showMessage("#annotation-message", "");
-    document.querySelector("#annotation-title").textContent = note ? "Edit annotation" : "Add annotation"; document.querySelector("#annotation-quote").textContent = `“${source.selectedText}”`; document.querySelector("#annotation-type").value = note?.category || defaultCategory; document.querySelector("#annotation-comment").value = note?.comment || ""; document.querySelector("#annotation-status").value = note?.status || "open"; document.querySelector("#requires-canon-change").checked = note?.requiresCanonChange || false; document.querySelector("#delete-annotation").hidden = !note; document.querySelector("#annotation-dialog").showModal(); document.querySelector("#annotation-comment").focus();
+    document.querySelector("#annotation-title").textContent = note ? "Edit annotation" : (source.target === "chapter_title" ? "Chapter title" : "Add annotation");
+    document.querySelector("#annotation-quote").textContent = (source.target === "chapter_title" || note?.target === "chapter_title") ? `Chapter title: “${source.selectedText || sourcePackage.title}”` : `“${source.selectedText}”`; document.querySelector("#annotation-type").value = note?.category || defaultCategory; document.querySelector("#annotation-comment").value = note?.comment || ""; document.querySelector("#annotation-status").value = note?.status || "open"; document.querySelector("#requires-canon-change").checked = note?.requiresCanonChange || false; document.querySelector("#delete-annotation").hidden = !note; document.querySelector("#annotation-dialog").showModal(); document.querySelector("#annotation-comment").focus();
   }
   function buildOwnerReviewPackage(annotations = review.annotations) { return { schemaVersion: 1, type: "owner_review", source: "owner", bookId: sourcePackage.bookId, chapterId: sourcePackage.chapterId, chapterNumber: sourcePackage.chapterNumber, chapterVersion: sourcePackage.chapterVersion, reviewedAt: review.reviewedAt || new Date().toISOString(), reviewStatus: "completed", annotations: annotations.map((note) => ({ ...note })) }; }
   function saveAnnotation(event) {
     event.preventDefault(); if (showingOriginalNotes()) { showMessage("#annotation-message", "The original review is read-only."); return; } const existing = editingId ? review.annotations.find((item) => item.id === editingId) : null, selection = existing || pendingSelection; if (!selection) return;
-    const annotation = { id: existing?.id || annotationId(), paragraphId: selection.paragraphId, selectedText: selection.selectedText, selectionStart: selection.selectionStart, selectionEnd: selection.selectionEnd, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked };
+    const isTitle = existing?.target === "chapter_title" || selection.target === "chapter_title";
+    const annotation = isTitle
+      ? { id: existing?.id || annotationId(), target: "chapter_title", selectedText: sourcePackage.title, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked }
+      : { id: existing?.id || annotationId(), paragraphId: selection.paragraphId, selectedText: selection.selectedText, selectionStart: selection.selectionStart, selectionEnd: selection.selectionEnd, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked };
     if (!annotation.comment) { showMessage("#annotation-message", "Add a comment before saving this note."); return; }
-    const paragraph = sourcePackage.content.find((item) => item.id === annotation.paragraphId); if (!paragraph || paragraph.text.substring(annotation.selectionStart, annotation.selectionEnd) !== annotation.selectedText) { showMessage("#annotation-message", "This selection no longer matches the original paragraph. Select the text again."); return; }
+    if (!isTitle) {
+      const paragraph = sourcePackage.content.find((item) => item.id === annotation.paragraphId); if (!paragraph || paragraph.text.substring(annotation.selectionStart, annotation.selectionEnd) !== annotation.selectedText) { showMessage("#annotation-message", "This selection no longer matches the original paragraph. Select the text again."); return; }
+    }
     const validation = MaxQuillReviewContract.validateOwnerReviewPackage(buildOwnerReviewPackage([annotation]), sourcePackage); if (!validation.valid) { showMessage("#annotation-message", validation.errors.join(" ")); return; }
-    if (existing) Object.assign(existing, annotation); else review.annotations.push(annotation); review.completed = false; review.reviewedAt = null; saveReview(); closeEditor(); renderChapterBody();
+    if (existing) { const index = review.annotations.findIndex((item) => item.id === editingId); if (index >= 0) review.annotations[index] = annotation; } else review.annotations.push(annotation); review.completed = false; review.reviewedAt = null; saveReview(); closeEditor(); renderChapterBody();
   }
   function quickFlag() { if (!pendingSelection) return; openEditor(null, "other"); document.querySelector("#annotation-comment").value = "Flagged for revision."; }
   function closeEditor() { document.querySelector("#annotation-dialog").close(); hideSelectionActions(true); window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; actionEngaged = false; }
@@ -292,10 +339,15 @@
     panelNotes.forEach((note, index) => {
       const item = document.createElement("li"); item.className = "review-note";
       item.innerHTML = '<button type="button" class="note-jump"><span></span><q></q><small></small></button>' + (sourceNotes ? "" : '<button type="button" class="note-edit">Edit</button>');
-      item.querySelector("span").textContent = `${index + 1}. ${note.category} · ${note.status}${note.requiresCanonChange ? " · Canon change" : ""}`;
+      item.querySelector("span").textContent = `${index + 1}. ${note.target === "chapter_title" ? "Chapter title" : note.category} · ${note.status}${note.requiresCanonChange ? " · Canon change" : ""}`;
       item.querySelector("q").textContent = note.selectedText; item.querySelector("small").textContent = note.comment;
       item.querySelector(".note-jump").addEventListener("click", () => {
         document.querySelector("#review-panel").close();
+        if (note.target === "chapter_title") {
+          if (sourceNotes && !showingOriginalNotes()) setRevisionView("notes");
+          (document.querySelector('[data-change-id="title:chapter_title"]') || document.querySelector("#chapter-title"))?.scrollIntoView({ block: "center", behavior: "smooth" });
+          return;
+        }
         if (sourceNotes && !showingOriginalNotes()) setRevisionView("notes");
         else if (!sourceNotes && revisionContext && showingChanges() && !document.querySelector(`#paragraph-${note.paragraphId}`)) setRevisionView("full");
         document.querySelector(`#paragraph-${note.paragraphId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -364,7 +416,7 @@
     actions.addEventListener("pointerdown", () => { actionEngaged = true; }); actions.addEventListener("click", (event) => { if (event.target.dataset.selectionAction === "comment") openEditor(); if (event.target.dataset.selectionAction === "flag") quickFlag(); actionEngaged = false; });
     addEventListener("scroll", () => { hideSelectionActions(false); showMessage("#selection-message", ""); }, { passive: true }); addEventListener("resize", () => { hideSelectionActions(false); handleTextSelection(180); }); addEventListener("orientationchange", () => { hideSelectionActions(false); handleTextSelection(250); });
     const submitHandler = MaxQuillSubmitFlow.createSubmitHandler({ submitAction: submitReview, setSubmitting(value) { submitting = value; updateJobUi(); }, showUnexpectedError(message) { showMessage("#review-message", message); } });
-    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelector("#finish-review").addEventListener("click", finishReview); document.querySelector("#submit-review").addEventListener("click", submitHandler); document.querySelector("#open-revised-version").addEventListener("click", openRevisedVersion); document.querySelector("#tab-review-notes").addEventListener("click", () => setRevisionView("notes")); document.querySelector("#tab-revision-changes").addEventListener("click", () => setRevisionView("changes")); document.querySelector("#toggle-revision-view").addEventListener("click", () => setRevisionView("full")); addEventListener("pagehide", stopPolling); updateReviewUi();
+    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelector("#finish-review").addEventListener("click", finishReview); document.querySelector("#submit-review").addEventListener("click", submitHandler); document.querySelector("#open-revised-version").addEventListener("click", openRevisedVersion); document.querySelector("#tab-review-notes").addEventListener("click", () => setRevisionView("notes")); document.querySelector("#tab-revision-changes").addEventListener("click", () => setRevisionView("changes")); document.querySelector("#toggle-revision-view").addEventListener("click", () => setRevisionView("full")); document.querySelector("#comment-chapter-title")?.addEventListener("click", () => openTitleEditor()); document.querySelector("#suggest-chapter-title")?.addEventListener("click", () => openTitleEditor(null, "Change chapter title to \"\"")); addEventListener("pagehide", stopPolling); updateReviewUi();
   }
   function saveProgress(markRead = false) { const read = new Set(progress.readChapters || []); if (markRead) read.add(String(sourcePackage.chapterNumber)); const furthest = window.MaxQuillCompanion ? MaxQuillCompanion.advanceFurthestChapter(progress, sourcePackage.chapterNumber, markRead) : Math.max(Number(progress.furthestChapter || 0), ...[...read].map(Number)); progress = { bookId: book.id, currentChapter: String(sourcePackage.chapterNumber), furthestChapter: furthest, readingProgress: Math.min(1, scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight)), lastOpened: new Date().toISOString(), readChapters: [...read], scrollPositions: { ...(progress.scrollPositions || {}), [sourcePackage.chapterId]: Math.round(scrollY) } }; writeStorage(PROGRESS_KEY, progress); if (window.MaxQuillCompanion) companionState = MaxQuillCompanion.getCompanionState(companionManifest, { progress, viewedChapterId: sourcePackage.chapterId }); }
   function setupProgress() { const saved = Number(progress.scrollPositions?.[sourcePackage.chapterId] || 0); requestAnimationFrame(() => scrollTo({ top: saved, behavior: "instant" })); addEventListener("scroll", () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { const max = Math.max(1, document.documentElement.scrollHeight - innerHeight); saveProgress(scrollY / max >= .88); }, 400); }, { passive: true }); addEventListener("pagehide", () => saveProgress()); document.querySelectorAll("[data-next-chapter]").forEach((link) => link.addEventListener("click", () => saveProgress(true))); }

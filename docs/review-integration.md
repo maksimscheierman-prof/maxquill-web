@@ -18,7 +18,7 @@ Demo links use `reader.html?book=demo-book&chapter=1&version=1`. Local annotatio
 
 ## Owner review export
 
-After Finish Review, MaxQuill constructs and validates an `OWNER_REVIEW_PACKAGE` containing only `schemaVersion`, `type`, `source`, chapter identity/version fields, `reviewedAt`, `reviewStatus`, and `annotations`. Each annotation contains only the contract-defined selection, category, comment, status, and canon-change fields. A download is blocked if its IDs, offsets, selected text, fields, or values fail validation.
+After Finish Review, MaxQuill constructs and validates an `OWNER_REVIEW_PACKAGE` containing only `schemaVersion`, `type`, `source`, chapter identity/version fields, `reviewedAt`, `reviewStatus`, and `annotations`. Paragraph annotations keep their existing selection fields. Chapter-title notes use `target: "chapter_title"` with the current package title in `selectedText` and omit paragraph IDs and quote offsets. A download is blocked if its IDs, offsets, selected text, fields, or values fail validation.
 
 The exported package returns to the Book Architecture for import and any owner-authorized revision. MaxQuill itself never writes to the book repository.
 
@@ -44,6 +44,8 @@ The changes-only view shows, for each detectable paragraph change:
 Owner comments whose source paragraph has no detectable text difference are listed separately as `Review item produced no detectable text change`. They are not treated as done.
 
 **View Full Chapter** remains a secondary action. It opens the complete revised chapter and uses the existing annotation editor on the revised package. New comments and flags belong to the revised version; they do not mutate the submitted original review. Local Accept markers stay on the revision session for that fingerprint pair.
+
+The chapter title is a first-class review target. MaxQuill records it as `target: "chapter_title"` with the current package title in `selectedText` and no paragraph ID or quote offsets. Title changes appear as their own Before/After card in the Changes view and do not alter `p###` assignment.
 
 ### Review actions in V1
 

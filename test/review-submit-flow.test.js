@@ -75,6 +75,8 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /setRevisionView\("changes"\)/);
   assert.match(script, /setRevisionView\("full"\)/);
   assert.match(script, /showingOriginalNotes\(\)/);
+  assert.match(script, /comment-chapter-title/);
+  assert.match(script, /target: "chapter_title"/);
   assert.doesNotMatch(script, /Review \(\$\{review\.annotations\.length\}/);
   assert.match(script, /getReviewResult\(reviewJob\.jobId, reviewIdentity\)/);
   assert.match(script, /version=\$\{result\.chapterVersion\}&resultJob=/);
@@ -83,4 +85,5 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(css, /\.review-bar \.open-revision-button\{min-height:3\.15rem/);
   assert.match(css, /\.review-tabs\{/);
   assert.match(css, /\.revision-change\{/);
+  assert.match(css, /\.chapter-title-review\{/);
 });

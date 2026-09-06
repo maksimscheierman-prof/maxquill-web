@@ -110,7 +110,7 @@
   }
 
   function changeCardCount(model) {
-    return (model?.changes?.length || 0) + (model?.unmatchedReviewItems?.length || 0);
+    return (model?.changes?.length || 0) + (model?.unmatchedReviewItems?.length || 0) + (model?.titleChange ? 1 : 0);
   }
 
   function originalNoteCount(ownerReview) {
@@ -142,13 +142,15 @@
   function applyAccepted(model, acceptedChangeIds) {
     const accepted = new Set(acceptedChangeIds || []);
     const changes = (model?.changes || []).map((change) => ({ ...change, accepted: accepted.has(change.id) }));
+    const titleChange = model?.titleChange ? { ...model.titleChange, accepted: accepted.has(model.titleChange.id) } : null;
     return {
       ...model,
+      titleChange,
       changes,
       unmatchedReviewItems: model?.unmatchedReviewItems || [],
       summary: {
         ...(model?.summary || {}),
-        accepted: changes.filter((change) => change.accepted).length
+        accepted: changes.filter((change) => change.accepted).length + (titleChange?.accepted ? 1 : 0)
       }
     };
   }

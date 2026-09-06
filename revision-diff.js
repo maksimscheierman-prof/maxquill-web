@@ -200,6 +200,7 @@
     }
     const unmatchedReviewItems = [];
     for (const annotation of notes) {
+      if (annotation?.target === "chapter_title") continue;
       const linked = byBeforeId.get(annotation.paragraphId) || [];
       if (linked.length) {
         for (const change of linked) {
@@ -233,21 +234,66 @@
     return { changes, unmatchedReviewItems };
   }
 
+  function isChapterTitleAnnotation(note) {
+    return Boolean(note && note.target === "chapter_title");
+  }
+
+  function titleNotesFrom(ownerReview) {
+    return (ownerReview?.annotations || []).filter(isChapterTitleAnnotation);
+  }
+
+  function diffChapterTitle(beforePackage, afterPackage, ownerReview) {
+    const beforeTitle = beforePackage?.title || "";
+    const afterTitle = afterPackage?.title || "";
+    const notes = titleNotesFrom(ownerReview);
+    if (beforeTitle === afterTitle) {
+      return {
+        titleChange: null,
+        unmatched: notes.map((annotation) => ({
+          id: `unmatched:${annotation.id}`,
+          kind: "title_unchanged",
+          reason: "no_detectable_text_change",
+          annotation,
+          before: { id: null, text: beforeTitle, index: -1 },
+          after: { id: null, text: afterTitle, index: -1 }
+        }))
+      };
+    }
+    return {
+      titleChange: {
+        id: "title:chapter_title",
+        kind: "title",
+        origin: notes.length ? "owner_requested" : "additional_revision",
+        ownerReviews: notes,
+        before: { id: null, text: beforeTitle, index: -1 },
+        after: { id: null, text: afterTitle, index: -1 },
+        beforeContext: null,
+        afterContext: null,
+        inline: inlineDiff(beforeTitle, afterTitle),
+        displayIndex: -1
+      },
+      unmatched: []
+    };
+  }
+
   function buildRevisionReviewModel(beforePackage, afterPackage, ownerReview) {
     const beforeContent = beforePackage?.content || [];
     const afterContent = afterPackage?.content || [];
     const changes = diffParagraphs(beforeContent, afterContent);
     const linked = linkOwnerReviewToChanges(changes, ownerReview?.annotations, beforeContent, afterContent);
+    const title = diffChapterTitle(beforePackage, afterPackage, ownerReview);
+    const unmatchedReviewItems = [...title.unmatched, ...linked.unmatchedReviewItems];
     return {
       beforeVersion: beforePackage?.chapterVersion ?? null,
       afterVersion: afterPackage?.chapterVersion ?? null,
+      titleChange: title.titleChange,
       changes: linked.changes,
-      unmatchedReviewItems: linked.unmatchedReviewItems,
+      unmatchedReviewItems,
       summary: {
-        total: linked.changes.length,
-        ownerRequested: linked.changes.filter((change) => change.origin === "owner_requested").length,
-        additional: linked.changes.filter((change) => change.origin === "additional_revision").length,
-        unmatched: linked.unmatchedReviewItems.length
+        total: linked.changes.length + (title.titleChange ? 1 : 0),
+        ownerRequested: linked.changes.filter((change) => change.origin === "owner_requested").length + (title.titleChange?.origin === "owner_requested" ? 1 : 0),
+        additional: linked.changes.filter((change) => change.origin === "additional_revision").length + (title.titleChange?.origin === "additional_revision" ? 1 : 0),
+        unmatched: unmatchedReviewItems.length
       }
     };
   }
@@ -260,6 +306,8 @@
     inlineDiff,
     diffParagraphs,
     linkOwnerReviewToChanges,
+    isChapterTitleAnnotation,
+    diffChapterTitle,
     buildRevisionReviewModel
   };
 });
