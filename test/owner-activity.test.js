@@ -118,6 +118,100 @@ test("revision-ready and failed local jobs surface as owner attention", () => {
   assert.equal(items.find((item) => item.kind === "revision-failed").title, "Revision · 1 failed");
 });
 
+function job(status, overrides = {}) {
+  const identity = {
+    bookId: overrides.bookId || "book-001",
+    chapterId: overrides.chapterId || "chapter_0001",
+    chapterVersion: overrides.chapterVersion || 1,
+    packageFingerprint: overrides.packageFingerprint || "a".repeat(64)
+  };
+  return reviewApi.normalizeJob({
+    jobId: overrides.jobId || `job-${status.toLowerCase()}`,
+    status,
+    submittedAt: overrides.submittedAt || "2026-09-06T00:00:00.000Z",
+    ...identity,
+    ...(overrides.error ? { error: overrides.error } : {})
+  }, identity);
+}
+
+test("FAILED only appears in Needs Attention", () => {
+  const failed = job("FAILED", { jobId: "job-failed-only", packageFingerprint: "1".repeat(64) });
+  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [failed] });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "revision-failed");
+  assert.equal(items[0].detail, "CH001");
+  assert.equal(items[0].title, "Revision · 1 failed");
+});
+
+test("FAILED then later REVISION_READY for the same workflow hides the old failure", () => {
+  const failed = job("FAILED", { jobId: "job-old-fail", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
+  const ready = job("REVISION_READY", { jobId: "job-recovered", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" });
+  const localJobs = [failed, ready];
+  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs });
+  assert.equal(items.some((item) => item.kind === "revision-failed"), false);
+  assert.equal(items.find((item) => item.kind === "revision-ready").title, "Revision · 1 ready");
+  assert.equal(items.find((item) => item.kind === "revision-ready").detail, "CH001");
+  assert.equal(activity.activeAttentionJobs(localJobs).failed.length, 0);
+  assert.equal(activity.activeAttentionJobs(localJobs).ready[0].jobId, "job-recovered");
+});
+
+test("FAILED old package then FAILED new package keeps the current failure visible", () => {
+  const oldFail = job("FAILED", { jobId: "job-old", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
+  const newFail = job("FAILED", { jobId: "job-new", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T03:00:00.000Z" });
+  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [oldFail, newFail] });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "revision-failed");
+  assert.equal(items[0].title, "Revision · 1 failed");
+  assert.equal(activity.activeAttentionJobs([oldFail, newFail]).failed[0].jobId, "job-new");
+});
+
+test("historical failed job remains stored when superseded", () => {
+  const storage = {
+    data: {},
+    get length() { return Object.keys(this.data).length; },
+    key(index) { return Object.keys(this.data)[index] || null; },
+    getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; },
+    setItem(key, value) { this.data[key] = String(value); }
+  };
+  const failed = job("FAILED", { jobId: "job-historical", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
+  const ready = job("REVISION_READY", { jobId: "job-current", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" });
+  storage.setItem(reviewApi.jobStorageKey(failed), JSON.stringify(failed));
+  storage.setItem(reviewApi.jobStorageKey(ready), JSON.stringify(ready));
+  const stored = activity.readLocalJobs(storage, reviewApi.normalizeJob);
+  assert.equal(stored.length, 2);
+  assert.ok(stored.some((item) => item.jobId === "job-historical" && item.status === "FAILED"));
+  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: stored });
+  assert.equal(items.some((item) => item.kind === "revision-failed"), false);
+  assert.equal(storage.getItem(reviewApi.jobStorageKey(failed)), JSON.stringify(failed));
+});
+
+test("unrelated chapter failure remains visible beside a recovered chapter", () => {
+  const recoveredFail = job("FAILED", { jobId: "ch1-fail", chapterId: "chapter_0001", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
+  const recoveredReady = job("REVISION_READY", { jobId: "ch1-ready", chapterId: "chapter_0001", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" });
+  const otherFail = job("FAILED", { jobId: "ch2-fail", chapterId: "chapter_0002", packageFingerprint: "3".repeat(64), submittedAt: "2026-09-06T01:30:00.000Z" });
+  const items = activity.buildItems({
+    book: { id: "book-001", chapters: [] },
+    overviewChapters: [],
+    openCommentsByKey: {},
+    localJobs: [recoveredFail, recoveredReady, otherFail]
+  });
+  assert.equal(items.find((item) => item.kind === "revision-ready").detail, "CH001");
+  assert.equal(items.find((item) => item.kind === "revision-failed").detail, "CH002");
+  assert.equal(items.find((item) => item.kind === "revision-failed").title, "Revision · 1 failed");
+});
+
+test("reload preserves the correct Needs Attention result after supersession", () => {
+  const localJobs = [
+    job("FAILED", { jobId: "job-old-fail", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" }),
+    job("REVISION_READY", { jobId: "job-ready", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" })
+  ];
+  const first = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs });
+  const second = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [...localJobs] });
+  assert.deepEqual(second, first);
+  assert.equal(first.some((item) => item.kind === "revision-failed"), false);
+  assert.equal(first.find((item) => item.kind === "revision-ready").detail, "CH001");
+});
+
 test("homepage activity loads open comments from owner-only invite APIs", async () => {
   const calls = [];
   const items = await activity.loadHomepageActivity({

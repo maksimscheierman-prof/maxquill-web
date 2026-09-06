@@ -38,6 +38,35 @@
     return `/reader.html?${params}`;
   }
 
+  function workflowKey(job) {
+    return `${job.bookId}:${job.chapterId}:${job.chapterVersion}`;
+  }
+
+  function jobTime(job) {
+    const value = Date.parse(job?.submittedAt || "");
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function activeAttentionJobs(localJobs = []) {
+    const byWorkflow = new Map();
+    for (const job of localJobs) {
+      if (!job || (job.status !== "FAILED" && job.status !== "REVISION_READY")) continue;
+      const key = workflowKey(job);
+      const list = byWorkflow.get(key) || [];
+      list.push(job);
+      byWorkflow.set(key, list);
+    }
+    const ready = [];
+    const failed = [];
+    for (const list of byWorkflow.values()) {
+      list.sort((left, right) => jobTime(left) - jobTime(right) || String(left.jobId).localeCompare(String(right.jobId)));
+      const latest = list[list.length - 1];
+      if (latest.status === "REVISION_READY") ready.push(latest);
+      else failed.push(latest);
+    }
+    return { ready, failed };
+  }
+
   function buildItems({ book, overviewChapters, openCommentsByKey, localJobs } = {}) {
     const items = [];
     for (const chapter of overviewChapters || []) {
@@ -73,8 +102,7 @@
       });
     }
 
-    const ready = jobs.filter((job) => job.status === "REVISION_READY");
-    const failed = jobs.filter((job) => job.status === "FAILED");
+    const { ready, failed } = activeAttentionJobs(jobs);
     if (ready.length) {
       const job = ready[0];
       items.push({
@@ -149,5 +177,5 @@
     return buildItems({ book, overviewChapters: overview.chapters, openCommentsByKey, localJobs });
   }
 
-  return { chapterLabel, buildItems, openCommentCount, render, readLocalJobs, loadHomepageActivity };
+  return { chapterLabel, workflowKey, jobTime, activeAttentionJobs, buildItems, openCommentCount, render, readLocalJobs, loadHomepageActivity };
 });
