@@ -307,22 +307,61 @@
     ];
   }
 
-  function changesReviewResolved(model, session, revisionAnnotations = []) {
+  function isResolvedDecisionState(state) {
+    return state !== "unresolved";
+  }
+
+  function decisionCardStates(model, session, revisionAnnotations = []) {
     const accepted = new Set(session?.acceptedChangeIds || []);
+    const cards = [];
     for (const card of logicalReviewCards(model)) {
       if (!card?.id) continue;
+      const feedback = feedbackForChange(revisionAnnotations, card.id, feedbackMetaForChange(card));
       if (card.kind === "unchanged" || card.kind === "unmapped" || card.kind === "title_unchanged") {
-        const feedback = feedbackForChange(revisionAnnotations, card.id, feedbackMetaForChange(card));
-        if (!feedback.length) return false;
+        if (!feedback.length) {
+          cards.push({ id: card.id, state: "unresolved", label: "Unresolved", resolved: false });
+          continue;
+        }
+        const decision = cardDecision({ accepted: false, feedbackNotes: feedback });
+        cards.push({ id: card.id, state: decision.state, label: decision.label, resolved: isResolvedDecisionState(decision.state) });
         continue;
       }
       const decision = cardDecision({
         accepted: accepted.has(card.id),
-        feedbackNotes: feedbackForChange(revisionAnnotations, card.id, feedbackMetaForChange(card))
+        feedbackNotes: feedback
       });
-      if (decision.state === "unresolved") return false;
+      cards.push({ id: card.id, state: decision.state, label: decision.label, resolved: isResolvedDecisionState(decision.state) });
     }
-    return true;
+    return cards;
+  }
+
+  function reviewDecisionProgress(model, session, revisionAnnotations = []) {
+    const cards = decisionCardStates(model, session, revisionAnnotations);
+    const unresolved = cards.filter((card) => !card.resolved);
+    return {
+      total: cards.length,
+      resolved: cards.length - unresolved.length,
+      unresolved: unresolved.length,
+      unresolvedIds: unresolved.map((card) => card.id),
+      firstUnresolvedId: unresolved[0]?.id || null,
+      allDecided: unresolved.length === 0,
+      cards
+    };
+  }
+
+  function changesReviewResolved(model, session, revisionAnnotations = []) {
+    return reviewDecisionProgress(model, session, revisionAnnotations).allDecided;
+  }
+
+  function finishReviewFeedback(progress) {
+    if (!progress || progress.allDecided) return null;
+    const count = progress.unresolved;
+    const noun = count === 1 ? "change" : "changes";
+    return {
+      title: "Review incomplete",
+      detail: `${count} ${noun} still need Accept, Comment, or Flag.`,
+      firstUnresolvedId: progress.firstUnresolvedId || null
+    };
   }
 
   function acceptAllEligibleIds(model, revisionAnnotations = []) {
@@ -519,7 +558,11 @@
     acceptAll,
     unresolvedRevisionFeedback,
     logicalReviewCards,
+    isResolvedDecisionState,
+    decisionCardStates,
+    reviewDecisionProgress,
     changesReviewResolved,
+    finishReviewFeedback,
     acceptAllEligibleIds,
     buildNextRevisionAnnotations,
     revisionViewState,

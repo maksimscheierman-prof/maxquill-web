@@ -45,6 +45,15 @@ test("unexpected async submit error is visible and re-enables retry", async () =
 test("finish review shows a clean submit CTA without a not-submitted status", () => {
   const state = flow.reviewUiState({ completed: true }, null, false, reviewApi.STATUS_LABELS);
   assert.equal(state.completion, "Review complete"); assert.equal(state.submittedHidden, true); assert.equal(state.submitted, ""); assert.equal(state.queueHidden, true); assert.equal(state.submitHidden, false); assert.equal(state.submitDisabled, false); assert.equal(state.submitText, "Submit for Revision");
+  assert.equal(state.showSubmitReason, false);
+});
+
+test("incomplete review disables submit with an owner-facing reason", () => {
+  const state = flow.reviewUiState({ completed: false }, null, false, reviewApi.STATUS_LABELS);
+  assert.equal(state.completion, "Review in progress");
+  assert.equal(state.submitDisabled, true);
+  assert.match(state.submitDisabledReason, /finish the review first/i);
+  assert.equal(state.showSubmitReason, true);
 });
 
 test("existing Submit/Queue/Revision flow is not broken", () => {

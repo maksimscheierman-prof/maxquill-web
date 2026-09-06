@@ -74,13 +74,20 @@
     <div class="panel-heading"><div><p class="eyebrow">Current chapter</p><h2 id="review-panel-title">Review Notes</h2></div><button class="icon-button" type="button" data-close-panel aria-label="Close review notes">&times;</button></div>
     <div id="review-summary"></div>
     <section class="review-job-status" id="review-job-status" aria-live="polite">
-      <strong>Review complete</strong>
+      <strong id="review-completion-title">Review in progress</strong>
+      <p class="review-progress-label" id="review-progress-label" hidden></p>
+      <p class="review-progress-detail" id="review-progress-detail" hidden></p>
       <span id="submission-state" hidden></span>
       <span id="queue-status" hidden></span>
     </section>
     <p class="form-message" id="review-message" role="alert" hidden></p>
     <ol class="review-note-list" id="review-note-list"></ol>
-    <div class="review-panel-actions"><button class="save-button" type="button" id="finish-review">Finish Review</button><button class="submit-button" type="button" id="submit-review">Submit for Revision</button></div>
+    <div class="review-panel-actions">
+      <button class="jump-open-button" type="button" id="jump-first-open" hidden>Jump to first open change</button>
+      <button class="save-button" type="button" id="finish-review">Finish Review</button>
+      <button class="submit-button" type="button" id="submit-review">Submit for Revision</button>
+      <p class="submit-disabled-reason" id="submit-disabled-reason" hidden></p>
+    </div>
   </dialog>
 
   <div class="submit-toast" id="submit-toast" role="status" aria-live="polite" hidden><strong id="submit-toast-title"></strong><span id="submit-toast-detail"></span></div>

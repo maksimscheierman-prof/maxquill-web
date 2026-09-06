@@ -336,7 +336,7 @@
   }
   function appendChangeCard(body, change, options = {}) {
     const decision = change.decision || MaxQuillRevisionReview.cardDecision({ accepted: change.accepted, feedbackNotes: change.revisionFeedback || [] });
-    const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${decision.accepted ? " is-accepted" : ""}${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}`);
+    const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${decision.accepted ? " is-accepted" : ""}${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}${decision.state === "unresolved" ? " is-unresolved" : ""}`);
     card.dataset.changeId = change.id;
     card.dataset.decision = decision.state;
     card.dataset.origin = change.origin || "";
@@ -345,7 +345,8 @@
     const title = options.title || (change.origin === "owner_requested" ? "Revision" : "Additional revision change");
     header.append(node("p", "revision-kicker", title));
     const headerMeta = node("div", "revision-change-header-meta");
-    if (decision.headerLabel) headerMeta.append(node("span", `revision-decision-badge${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.headerLabel));
+    if (decision.state === "unresolved") headerMeta.append(node("span", "revision-decision-badge is-open", "OPEN"));
+    else if (decision.headerLabel) headerMeta.append(node("span", `revision-decision-badge${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.headerLabel));
     headerMeta.append(node("span", "revision-kind-badge", kindLabel(change.kind)));
     header.append(headerMeta);
     card.append(header);
@@ -477,12 +478,53 @@
     );
     saveRevisionSession(); refreshRevisionModel(); renderChapterBody(); updateReviewUi();
   }
+  function currentDecisionProgress() {
+    if (!revisionContext?.model) return null;
+    return MaxQuillRevisionReview.reviewDecisionProgress(revisionContext.model, revisionContext.session, review?.annotations || []);
+  }
+  function jumpToUnresolvedChange(changeId) {
+    if (!changeId || !revisionContext) return false;
+    document.querySelector("#review-panel")?.close();
+    if (!showingChanges()) setRevisionView("changes");
+    const escaped = (typeof CSS !== "undefined" && typeof CSS.escape === "function")
+      ? CSS.escape(changeId)
+      : String(changeId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const target = document.querySelector(`[data-change-id="${escaped}"]`);
+    if (!target) return false;
+    document.querySelectorAll(".revision-change.is-open-focus").forEach((node) => node.classList.remove("is-open-focus"));
+    target.classList.add("is-open-focus");
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+    clearTimeout(jumpToUnresolvedChange.timer);
+    jumpToUnresolvedChange.timer = setTimeout(() => target.classList.remove("is-open-focus"), 2400);
+    return true;
+  }
+  function jumpToFirstOpenChange() {
+    const progress = currentDecisionProgress();
+    if (!progress?.firstUnresolvedId) {
+      showMessage("#review-message", "No open changes remain.");
+      return;
+    }
+    showMessage("#review-message", "");
+    jumpToUnresolvedChange(progress.firstUnresolvedId);
+  }
   function renderRevisionChanges() {
     const body = document.querySelector("#chapter-body"); if (!body || !revisionContext?.model) return;
     body.replaceChildren();
     const model = revisionContext.model, toolbar = node("div", "revision-toolbar"), summary = node("p");
+    const progress = currentDecisionProgress();
     summary.textContent = `${model.summary.total} ${model.summary.total === 1 ? "change" : "changes"} · ${model.summary.ownerRequested} owner-requested · ${model.summary.additional} additional${model.summary.unmatched ? ` · ${model.summary.unmatched} with no detectable text change` : ""}`;
     toolbar.append(summary);
+    if (progress?.unresolved) {
+      const openMeta = node("p", "revision-open-summary");
+      openMeta.textContent = `${progress.unresolved} OPEN · ${progress.resolved} / ${progress.total} decisions complete`;
+      toolbar.append(openMeta);
+      const nextOpen = node("button", "", "Next open");
+      nextOpen.type = "button";
+      nextOpen.addEventListener("click", jumpToFirstOpenChange);
+      toolbar.append(nextOpen);
+    }
     const legend = node("p", "revision-legend");
     legend.append(
       node("span", "revision-legend-new", "Green — New / Revised"),
@@ -503,7 +545,7 @@
     model.unmatchedReviewItems.forEach((item) => {
       const changeLike = { ...item, id: item.id, after: item.after, sourceOwnerNoteId: item.annotation?.id || item.sourceOwnerNoteId || null, ownerReviews: item.annotation ? [item.annotation] : [] };
       const decision = item.decision || MaxQuillRevisionReview.cardDecision({ accepted: revisionContext.session.acceptedChangeIds.includes(item.id), feedbackNotes: item.revisionFeedback || [] });
-      const card = node("article", `revision-change${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}`);
+      const card = node("article", `revision-change${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}${decision.state === "unresolved" ? " is-unresolved" : ""}`);
       card.dataset.changeId = item.id;
       card.dataset.decision = decision.state;
       if (changeLike.sourceOwnerNoteId) card.dataset.sourceOwnerNoteId = changeLike.sourceOwnerNoteId;
@@ -511,7 +553,8 @@
       const header = node("div", "revision-change-header");
       header.append(node("p", "revision-kicker", titleItem ? "Chapter title" : "Owner Review Note"));
       const headerMeta = node("div", "revision-change-header-meta");
-      if (decision.headerLabel) headerMeta.append(node("span", `revision-decision-badge${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.headerLabel));
+      if (decision.state === "unresolved") headerMeta.append(node("span", "revision-decision-badge is-open", "OPEN"));
+      else if (decision.headerLabel) headerMeta.append(node("span", `revision-decision-badge${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.headerLabel));
       headerMeta.append(node("span", "revision-kind-badge", "No text change"));
       header.append(headerMeta);
       card.append(header);
@@ -713,13 +756,20 @@
   function finishReview() {
     if (showingOriginalNotes()) return;
     if (revisionContext && showingChanges()) {
+      const progress = currentDecisionProgress();
+      const blocked = MaxQuillRevisionReview.finishReviewFeedback(progress);
+      if (blocked) {
+        showMessage("#review-message", `${blocked.title}. ${blocked.detail}`);
+        updateJobUi();
+        return;
+      }
       if (!MaxQuillRevisionReview.changesReviewResolved(revisionContext.model, revisionContext.session, review.annotations)) {
         showMessage("#review-message", "Resolve every change with Accept, Comment, or Flag before finishing.");
         return;
       }
       review.reviewedAt = new Date().toISOString();
       review.completed = true;
-      showMessage("#review-message", "Revision review complete.");
+      showMessage("#review-message", "Review complete. All changes have been reviewed.");
       saveReview();
       updateReviewUi();
       return;
@@ -729,6 +779,7 @@
     const validation = MaxQuillReviewContract.validateOwnerReviewPackage(buildOwnerReviewPackage(), sourcePackage);
     if (!validation.valid) { review.reviewedAt = previousReviewedAt; showMessage("#review-message", `Review cannot be completed: ${validation.errors.join(" ")}`); return; }
     review.completed = true; showMessage("#review-message", "Review complete."); saveReview();
+    updateReviewUi();
   }
   function buildSubmitOwnerPackage() {
     if (revisionContext) return buildOwnerReviewPackage(MaxQuillRevisionReview.buildNextRevisionAnnotations(review.annotations));
@@ -740,13 +791,44 @@
   }
   function persistJob(job) { reviewJob = job; writeStorage(MaxQuillReviewApi.jobStorageKey(reviewIdentity), job); persistRevisionSource(job.jobId); updateJobUi(); }
   function updateJobUi() {
-    if (!review || !sourcePackage) return; const submit = document.querySelector("#submit-review"), openRevision = document.querySelector("#open-revised-version"), toggleView = document.querySelector("#toggle-revision-view"), completion = document.querySelector("#review-job-status strong"), submitted = document.querySelector("#submission-state"), queue = document.querySelector("#queue-status");
-    const state = MaxQuillSubmitFlow.reviewUiState(review, reviewJob, submitting, MaxQuillReviewApi.STATUS_LABELS);
+    if (!review || !sourcePackage) return; const submit = document.querySelector("#submit-review"), openRevision = document.querySelector("#open-revised-version"), toggleView = document.querySelector("#toggle-revision-view"), completion = document.querySelector("#review-completion-title") || document.querySelector("#review-job-status strong"), submitted = document.querySelector("#submission-state"), queue = document.querySelector("#queue-status");
+    const progress = currentDecisionProgress();
+    const packageEligible = review.packageFingerprint === reviewIdentity.packageFingerprint;
+    const state = MaxQuillSubmitFlow.reviewUiState(review, reviewJob, submitting, MaxQuillReviewApi.STATUS_LABELS, {
+      progress,
+      hasRevisionDecisions: Boolean(revisionContext),
+      packageEligible
+    });
     const view = MaxQuillRevisionReview.revisionViewState({ hasRevisionPair: Boolean(revisionContext), viewMode: revisionContext?.session?.viewMode || "changes", jobStatus: reviewJob?.status });
-    completion.textContent = state.completion; submitted.hidden = state.submittedHidden; submitted.textContent = state.submitted; queue.hidden = state.queueHidden; queue.textContent = state.queue; queue.className = "";
+    completion.textContent = state.completion;
+    const progressLabel = document.querySelector("#review-progress-label");
+    const progressDetail = document.querySelector("#review-progress-detail");
+    if (progressLabel) {
+      progressLabel.hidden = !state.showProgress || !state.progressLabel;
+      progressLabel.textContent = state.progressLabel || "";
+    }
+    if (progressDetail) {
+      const detail = state.progressDetail || state.completionDetail || "";
+      progressDetail.hidden = !detail;
+      progressDetail.textContent = detail;
+    }
+    submitted.hidden = state.submittedHidden; submitted.textContent = state.submitted; queue.hidden = state.queueHidden; queue.textContent = state.queue; queue.className = "";
     if (state.readerStatus && !revisionContext) document.querySelector("#review-chapter-status").textContent = state.readerStatus;
     if (reviewJob?.status === "REVISION_READY") queue.className = "is-ready"; if (reviewJob?.status === "FAILED") queue.className = "is-failed";
     submit.hidden = state.submitHidden; submit.disabled = state.submitDisabled; submit.textContent = state.submitText;
+    submit.setAttribute("aria-disabled", String(state.submitDisabled));
+    if (state.submitDisabledReason) submit.setAttribute("aria-description", state.submitDisabledReason);
+    else submit.removeAttribute("aria-description");
+    const reason = document.querySelector("#submit-disabled-reason");
+    if (reason) {
+      reason.hidden = !state.showSubmitReason;
+      reason.textContent = state.showSubmitReason ? state.submitDisabledReason : "";
+    }
+    const jump = document.querySelector("#jump-first-open");
+    if (jump) {
+      jump.hidden = !state.showJumpToOpen || showingOriginalNotes();
+      jump.textContent = state.jumpToOpenLabel || "Jump to first open change";
+    }
     openRevision.hidden = view.openRevisedHidden; openRevision.textContent = view.openRevisedLabel;
     toggleView.hidden = view.toggleHidden; toggleView.textContent = view.toggleLabel; toggleView.setAttribute("aria-pressed", String(view.togglePressed));
   }
@@ -761,7 +843,10 @@
     showMessage("#review-message", ""); if (showingOriginalNotes()) return; if (!review.completed) { showMessage("#review-message", "Finish the review before submitting."); return; }
     if (revisionContext) {
       if (!MaxQuillRevisionReview.changesReviewResolved(revisionContext.model, revisionContext.session, review.annotations)) {
-        showMessage("#review-message", "Resolve every change with Accept, Comment, or Flag before submitting.");
+        const progress = currentDecisionProgress();
+        const blocked = MaxQuillRevisionReview.finishReviewFeedback(progress);
+        showMessage("#review-message", blocked ? `${blocked.title}. ${blocked.detail}` : "Resolve every change with Accept, Comment, or Flag before submitting.");
+        updateJobUi();
         return;
       }
       const feedback = MaxQuillRevisionReview.unresolvedRevisionFeedback(review.annotations);
@@ -800,7 +885,7 @@
     actions.addEventListener("pointerdown", () => { actionEngaged = true; }); actions.addEventListener("click", (event) => { if (event.target.dataset.selectionAction === "comment") openEditor(); if (event.target.dataset.selectionAction === "flag") quickFlag(); actionEngaged = false; });
     addEventListener("scroll", () => { hideSelectionActions(false); showMessage("#selection-message", ""); }, { passive: true }); addEventListener("resize", () => { hideSelectionActions(false); handleTextSelection(180); }); addEventListener("orientationchange", () => { hideSelectionActions(false); handleTextSelection(250); });
     const submitHandler = MaxQuillSubmitFlow.createSubmitHandler({ submitAction: submitReview, setSubmitting(value) { submitting = value; updateJobUi(); }, showUnexpectedError(message) { showMessage("#review-message", message); } });
-    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelector("#finish-review").addEventListener("click", finishReview); document.querySelector("#submit-review").addEventListener("click", submitHandler); document.querySelector("#open-revised-version").addEventListener("click", openRevisedVersion); document.querySelector("#tab-review-notes").addEventListener("click", () => setRevisionView("notes")); document.querySelector("#tab-revision-changes").addEventListener("click", () => setRevisionView("changes")); document.querySelector("#toggle-revision-view").addEventListener("click", () => setRevisionView("full")); document.querySelector("#comment-chapter-title")?.addEventListener("click", () => openTitleEditor()); document.querySelector("#suggest-chapter-title")?.addEventListener("click", () => openTitleEditor(null, "Change chapter title to \"\"")); addEventListener("pagehide", stopPolling); updateReviewUi();
+    document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation); document.querySelector("#open-review-panel").addEventListener("click", () => document.querySelector("#review-panel").showModal()); document.querySelector("[data-close-panel]").addEventListener("click", () => document.querySelector("#review-panel").close()); document.querySelector("#finish-review").addEventListener("click", finishReview); document.querySelector("#jump-first-open")?.addEventListener("click", jumpToFirstOpenChange); document.querySelector("#submit-review").addEventListener("click", submitHandler); document.querySelector("#open-revised-version").addEventListener("click", openRevisedVersion); document.querySelector("#tab-review-notes").addEventListener("click", () => setRevisionView("notes")); document.querySelector("#tab-revision-changes").addEventListener("click", () => setRevisionView("changes")); document.querySelector("#toggle-revision-view").addEventListener("click", () => setRevisionView("full")); document.querySelector("#comment-chapter-title")?.addEventListener("click", () => openTitleEditor()); document.querySelector("#suggest-chapter-title")?.addEventListener("click", () => openTitleEditor(null, "Change chapter title to \"\"")); addEventListener("pagehide", stopPolling); updateReviewUi();
   }
   function saveProgress(markRead = false) { const read = new Set(progress.readChapters || []); if (markRead) read.add(String(sourcePackage.chapterNumber)); const furthest = window.MaxQuillCompanion ? MaxQuillCompanion.advanceFurthestChapter(progress, sourcePackage.chapterNumber, markRead) : Math.max(Number(progress.furthestChapter || 0), ...[...read].map(Number)); progress = { bookId: book.id, currentChapter: String(sourcePackage.chapterNumber), furthestChapter: furthest, readingProgress: Math.min(1, scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight)), lastOpened: new Date().toISOString(), readChapters: [...read], scrollPositions: { ...(progress.scrollPositions || {}), [sourcePackage.chapterId]: Math.round(scrollY) } }; writeStorage(PROGRESS_KEY, progress); if (window.MaxQuillCompanion) companionState = MaxQuillCompanion.getCompanionState(companionManifest, { progress, viewedChapterId: sourcePackage.chapterId }); }
   function setupProgress() { const saved = Number(progress.scrollPositions?.[sourcePackage.chapterId] || 0); requestAnimationFrame(() => scrollTo({ top: saved, behavior: "instant" })); addEventListener("scroll", () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { const max = Math.max(1, document.documentElement.scrollHeight - innerHeight); saveProgress(scrollY / max >= .88); }, 400); }, { passive: true }); addEventListener("pagehide", () => saveProgress()); document.querySelectorAll("[data-next-chapter]").forEach((link) => link.addEventListener("click", () => saveProgress(true))); }
