@@ -6,7 +6,10 @@
   "use strict";
 
   const REVIEW_READY_FIELDS = ["schemaVersion", "type", "bookId", "chapterId", "chapterNumber", "chapterVersion", "status", "title", "exportedAt", "content"];
+  const OPTIONAL_REVIEW_READY_FIELDS = ["reviserNotes"];
   const PARAGRAPH_FIELDS = ["id", "text"];
+  const REVISER_NOTE_FIELDS = ["id", "note"];
+  const OPTIONAL_REVISER_NOTE_FIELDS = ["afterParagraphIds", "afterQuote"];
   const OWNER_REVIEW_FIELDS = ["schemaVersion", "type", "source", "bookId", "chapterId", "chapterNumber", "chapterVersion", "reviewedAt", "reviewStatus", "annotations"];
   const ANNOTATION_FIELDS = ["id", "paragraphId", "selectedText", "selectionStart", "selectionEnd", "category", "comment", "status", "requiresCanonChange"];
   const TITLE_ANNOTATION_FIELDS = ["id", "target", "selectedText", "category", "comment", "status", "requiresCanonChange"];
@@ -36,9 +39,42 @@
   function isIsoDate(value) { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value)); }
   function result(errors) { return { valid: errors.length === 0, errors }; }
 
+  function validateReviserNotes(notes, content, errors, label = "reviserNotes") {
+    if (notes == null) return;
+    if (!Array.isArray(notes)) {
+      errors.push(`${label} must be an array when present.`);
+      return;
+    }
+    const paragraphIds = new Set((content || []).map((paragraph) => paragraph?.id).filter(Boolean));
+    const noteIds = new Set();
+    notes.forEach((note, index) => {
+      exactFields(note, REVISER_NOTE_FIELDS, `${label}[${index}]`, errors, OPTIONAL_REVISER_NOTE_FIELDS);
+      if (!note || typeof note !== "object") return;
+      if (typeof note.id !== "string" || !note.id.trim()) errors.push(`${label}[${index}].id must be non-empty.`);
+      else if (noteIds.has(note.id)) errors.push(`${label} ID "${note.id}" is duplicated.`);
+      else noteIds.add(note.id);
+      if (typeof note.note !== "string" || !note.note.trim()) errors.push(`${label}[${index}].note must be non-empty.`);
+      const hasIds = Array.isArray(note.afterParagraphIds) && note.afterParagraphIds.length > 0;
+      const hasQuote = typeof note.afterQuote === "string" && note.afterQuote.trim();
+      if (!hasIds && !hasQuote) errors.push(`${label}[${index}] must include afterParagraphIds or afterQuote.`);
+      if (note.afterParagraphIds != null) {
+        if (!Array.isArray(note.afterParagraphIds) || !note.afterParagraphIds.length) errors.push(`${label}[${index}].afterParagraphIds must be a non-empty array when present.`);
+        else {
+          note.afterParagraphIds.forEach((paragraphId, paragraphIndex) => {
+            if (typeof paragraphId !== "string" || !/^p\d{3}$/.test(paragraphId)) errors.push(`${label}[${index}].afterParagraphIds[${paragraphIndex}] must match p###.`);
+            else if (paragraphIds.size && !paragraphIds.has(paragraphId)) errors.push(`${label}[${index}].afterParagraphIds[${paragraphIndex}] does not exist in content.`);
+          });
+        }
+      }
+      if (note.afterQuote != null && (typeof note.afterQuote !== "string" || !note.afterQuote.trim())) {
+        errors.push(`${label}[${index}].afterQuote must be a non-empty string when present.`);
+      }
+    });
+  }
+
   function validateReviewReadyPackage(pkg) {
     const errors = [];
-    exactFields(pkg, REVIEW_READY_FIELDS, "REVIEW_READY_PACKAGE", errors);
+    exactFields(pkg, REVIEW_READY_FIELDS, "REVIEW_READY_PACKAGE", errors, OPTIONAL_REVIEW_READY_FIELDS);
     if (!pkg || typeof pkg !== "object" || Array.isArray(pkg)) return result(errors);
     if (pkg.schemaVersion !== 1) errors.push("Unsupported REVIEW_READY_PACKAGE schemaVersion; expected 1.");
     if (pkg.type !== "review_ready_chapter") errors.push('REVIEW_READY_PACKAGE type must be "review_ready_chapter".');
@@ -61,6 +97,7 @@
         if (typeof paragraph.text !== "string" || !paragraph.text.trim()) errors.push(`content[${index}].text must be non-empty.`);
       });
     }
+    validateReviserNotes(pkg.reviserNotes, pkg.content, errors);
     return result(errors);
   }
 

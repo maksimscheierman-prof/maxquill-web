@@ -420,7 +420,7 @@
     return "changed";
   }
 
-  function makeGroupedChange({ id, origin, ownerReviews, hunks, beforeContent, afterContent, sourceOwnerNoteId = null }) {
+  function makeGroupedChange({ id, origin, ownerReviews, hunks, beforeContent, afterContent, sourceOwnerNoteId = null, revisionReason = null }) {
     const beforeTouched = new Set();
     const afterTouched = new Set();
     const beforeRoles = new Map();
@@ -452,6 +452,7 @@
       origin,
       ownerReviews: ownerReviews || [],
       sourceOwnerNoteId,
+      revisionReason: revisionReason || null,
       hunks: hunks.map((hunk) => ({ id: hunk.id, kind: hunk.kind, before: hunk.before, after: hunk.after })),
       memberIds: hunks.map((hunk) => hunk.id),
       before: beforePassages.length ? { id: firstBefore?.id || null, text: beforeText, index: beforeIndexes[0] ?? null, passages: beforePassages } : null,
@@ -624,6 +625,50 @@
     };
   }
 
+  function changeAfterIds(change) {
+    const ids = new Set();
+    if (change?.after?.id) ids.add(change.after.id);
+    for (const passage of change?.after?.passages || []) if (passage?.id) ids.add(passage.id);
+    for (const hunk of change?.hunks || []) if (hunk.after?.id) ids.add(hunk.after.id);
+    return ids;
+  }
+
+  function changeAfterText(change) {
+    if (change?.after?.text) return change.after.text;
+    return (change?.after?.passages || []).map((passage) => passage.text || "").join("\n\n");
+  }
+
+  function reviserNoteMatchesChange(note, change) {
+    if (!note || !change || change.origin !== "additional_revision") return false;
+    const afterIds = changeAfterIds(change);
+    const noteIds = Array.isArray(note.afterParagraphIds) ? note.afterParagraphIds.filter(Boolean) : [];
+    if (noteIds.some((id) => afterIds.has(id))) return true;
+    const quote = normalizeText(note.afterQuote || "");
+    if (!quote) return false;
+    return normalizeText(changeAfterText(change)).includes(quote);
+  }
+
+  function attachReviserNotes(changes, reviserNotes) {
+    const notes = Array.isArray(reviserNotes) ? reviserNotes.filter((note) => note && typeof note.note === "string" && note.note.trim()) : [];
+    if (!notes.length) return changes.map((change) => ({ ...change, revisionReason: change.revisionReason || null }));
+    const claimed = new Set();
+    return changes.map((change) => {
+      if (change.origin !== "additional_revision") return { ...change, revisionReason: null };
+      if (change.revisionReason) return change;
+      const matches = notes
+        .map((note, index) => ({ note, index }))
+        .filter(({ note, index }) => !claimed.has(index) && reviserNoteMatchesChange(note, change));
+      if (!matches.length) return { ...change, revisionReason: null };
+      matches.sort((left, right) => {
+        const leftIds = (left.note.afterParagraphIds || []).filter((id) => changeAfterIds(change).has(id)).length;
+        const rightIds = (right.note.afterParagraphIds || []).filter((id) => changeAfterIds(change).has(id)).length;
+        return rightIds - leftIds || left.index - right.index;
+      });
+      claimed.add(matches[0].index);
+      return { ...change, revisionReason: matches[0].note.note.trim(), reviserNoteId: matches[0].note.id || null };
+    });
+  }
+
   function buildRevisionReviewModel(beforePackage, afterPackage, ownerReview) {
     const beforeContent = beforePackage?.content || [];
     const afterContent = afterPackage?.content || [];
@@ -631,16 +676,24 @@
     const linked = linkOwnerReviewToChanges(changes, ownerReview?.annotations, beforeContent, afterContent);
     const title = diffChapterTitle(beforePackage, afterPackage, ownerReview);
     const unmatchedReviewItems = [...title.unmatched, ...linked.unmatchedReviewItems];
+    const withReasons = attachReviserNotes(linked.changes, afterPackage?.reviserNotes);
+    let titleChange = title.titleChange;
+    if (titleChange?.origin === "additional_revision") {
+      const attached = attachReviserNotes([titleChange], afterPackage?.reviserNotes)[0];
+      titleChange = attached;
+    } else if (titleChange) {
+      titleChange = { ...titleChange, revisionReason: null };
+    }
     return {
       beforeVersion: beforePackage?.chapterVersion ?? null,
       afterVersion: afterPackage?.chapterVersion ?? null,
-      titleChange: title.titleChange,
-      changes: linked.changes,
+      titleChange,
+      changes: withReasons,
       unmatchedReviewItems,
       summary: {
-        total: linked.changes.length + (title.titleChange ? 1 : 0),
-        ownerRequested: linked.changes.filter((change) => change.origin === "owner_requested").length + (title.titleChange?.origin === "owner_requested" ? 1 : 0),
-        additional: linked.changes.filter((change) => change.origin === "additional_revision").length + (title.titleChange?.origin === "additional_revision" ? 1 : 0),
+        total: withReasons.length + (titleChange ? 1 : 0),
+        ownerRequested: withReasons.filter((change) => change.origin === "owner_requested").length + (titleChange?.origin === "owner_requested" ? 1 : 0),
+        additional: withReasons.filter((change) => change.origin === "additional_revision").length + (titleChange?.origin === "additional_revision" ? 1 : 0),
         unmatched: unmatchedReviewItems.length
       }
     };
@@ -656,6 +709,7 @@
     linkOwnerReviewToChanges,
     isChapterTitleAnnotation,
     diffChapterTitle,
+    attachReviserNotes,
     buildRevisionReviewModel
   };
 });

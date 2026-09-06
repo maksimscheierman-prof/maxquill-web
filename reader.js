@@ -214,6 +214,13 @@
     side.append(node("span", "revision-side-label", hasOwnerNote ? layout.labels.ownerNote : layout.labels.additional));
     if (!hasOwnerNote) {
       side.append(node("p", "revision-additional-note", layout.additionalNote));
+      if (change.revisionReason) {
+        side.append(node("p", "revision-note-field-label", layout.labels.reviserReason || "Reviser reason"));
+        const reason = document.createElement("blockquote");
+        reason.className = "revision-note-comment revision-reviser-reason";
+        reason.textContent = change.revisionReason;
+        side.append(reason);
+      }
       if (decision?.feedbackNotes?.length) appendRevisionFeedbackInto(side, decision.feedbackNotes, layout);
       parent.append(side);
       return;

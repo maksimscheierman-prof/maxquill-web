@@ -244,6 +244,7 @@ test("grouped rewrite keeps full old and new paragraphs for review", () => {
   assert.equal(layout.labels.ownerNote, "Owner Review Note");
   assert.equal(layout.labels.additional, "Additional Revision Change");
   assert.equal(layout.labels.revisionFeedback, "Revision Review Feedback");
+  assert.equal(layout.labels.reviserReason, "Reviser reason");
   assert.match(layout.additionalNote, /No Owner Review Note/);
 });
 

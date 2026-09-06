@@ -9,6 +9,16 @@ test("all demo review candidates load and validate with ordered IDs", () => { fo
 test("valid owner review and empty annotations pass", () => { assert.equal(contract.validateOwnerReviewPackage(owner(), source).valid, true); assert.equal(contract.validateOwnerReviewPackage(owner([]), source).valid, true); });
 const readyCases = [["schemaVersion 2", (p) => { p.schemaVersion = 2; }], ["unknown top-level field", (p) => { p.extra = true; }], ["unknown paragraph field", (p) => { p.content[0].extra = true; }], ["invalid chapterId", (p) => { p.chapterId = "chapter_1"; }], ["duplicate paragraph IDs", (p) => { p.content[1].id = p.content[0].id; }]];
 for (const [name, mutate] of readyCases) test(`rejects REVIEW_READY: ${name}`, () => { const pkg = clone(source); mutate(pkg); assert.equal(contract.validateReviewReadyPackage(pkg).valid, false); });
+
+test("optional reviserNotes validate and remain optional for legacy packages", () => {
+  assert.equal(contract.validateReviewReadyPackage(source).valid, true);
+  const withNotes = clone(source);
+  withNotes.reviserNotes = [{ id: "rn-1", note: "Made Kael's movement easier to follow.", afterParagraphIds: [source.content[0].id] }];
+  assert.equal(contract.validateReviewReadyPackage(withNotes).valid, true);
+  const bad = clone(source);
+  bad.reviserNotes = [{ id: "rn-1", note: "Too generic.", afterParagraphIds: ["p999"] }];
+  assert.equal(contract.validateReviewReadyPackage(bad).valid, false);
+});
 const ownerCases = [["invalid category flag", (p) => { p.annotations[0].category = "flag"; }], ["empty comment", (p) => { p.annotations[0].comment = " "; }], ["unknown annotation field", (p) => { p.annotations[0].extra = true; }], ["unknown paragraphId", (p) => { p.annotations[0].paragraphId = "p999"; }], ["selectionStart below zero", (p) => { p.annotations[0].selectionStart = -1; }], ["selectionEnd not after start", (p) => { p.annotations[0].selectionEnd = 0; }], ["selectionEnd beyond paragraph", (p) => { p.annotations[0].selectionEnd = 9999; }], ["selectedText mismatch", (p) => { p.annotations[0].selectedText = "bad"; }], ["requiresCanonChange not boolean", (p) => { p.annotations[0].requiresCanonChange = "false"; }], ["duplicate annotation IDs", (p) => { p.annotations.push(clone(p.annotations[0])); }]];
 for (const [name, mutate] of ownerCases) test(`rejects OWNER_REVIEW: ${name}`, () => { const pkg = owner(); mutate(pkg); assert.equal(contract.validateOwnerReviewPackage(pkg, source).valid, false); });
 

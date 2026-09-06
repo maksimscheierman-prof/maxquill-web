@@ -100,9 +100,13 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /dataset\.revisionView/);
   assert.match(script, /layout\.additionalNote|additionalNote/);
   assert.match(script, /labels\.additional|Additional Revision Change/);
+  assert.match(script, /revisionReason/);
+  assert.match(script, /reviserReason|Reviser reason/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /No Owner Review Note — this change was made independently by the reviser\./);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Additional Revision Change/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Owner Review Note/);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Reviser reason/);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-diff.js"), "utf8"), /attachReviserNotes/);
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
   assert.match(script, /revision-prose/);

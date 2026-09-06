@@ -483,7 +483,8 @@
         old: "Old Version",
         ownerNote: "Owner Review Note",
         additional: "Additional Revision Change",
-        revisionFeedback: "Revision Review Feedback"
+        revisionFeedback: "Revision Review Feedback",
+        reviserReason: "Reviser reason"
       },
       additionalNote: "No Owner Review Note — this change was made independently by the reviser.",
       kindBadgeSecondary: true
