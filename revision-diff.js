@@ -650,22 +650,47 @@
 
   function attachReviserNotes(changes, reviserNotes) {
     const notes = Array.isArray(reviserNotes) ? reviserNotes.filter((note) => note && typeof note.note === "string" && note.note.trim()) : [];
-    if (!notes.length) return changes.map((change) => ({ ...change, revisionReason: change.revisionReason || null }));
+    if (!notes.length) {
+      return changes.map((change) => ({
+        ...change,
+        revisionReason: change.revisionReason || null,
+        reviserAdjustment: change.reviserAdjustment || null
+      }));
+    }
     const claimed = new Set();
     return changes.map((change) => {
-      if (change.origin !== "additional_revision") return { ...change, revisionReason: null };
-      if (change.revisionReason) return change;
+      let reviserAdjustment = change.reviserAdjustment || null;
+      if (!reviserAdjustment && change.origin === "owner_requested") {
+        const ownerIds = new Set((change.ownerReviews || []).map((note) => note.id).filter(Boolean));
+        if (change.sourceOwnerNoteId) ownerIds.add(change.sourceOwnerNoteId);
+        const adjustments = notes
+          .map((note, index) => ({ note, index }))
+          .filter(({ note, index }) => !claimed.has(index) && note.kind === "owner_change_adjustment" && ownerIds.has(note.sourceOwnerNoteId));
+        if (adjustments.length) {
+          claimed.add(adjustments[0].index);
+          reviserAdjustment = adjustments[0].note.note.trim();
+        }
+      }
+      if (change.origin !== "additional_revision") {
+        return { ...change, revisionReason: null, reviserAdjustment };
+      }
+      if (change.revisionReason) return { ...change, reviserAdjustment };
       const matches = notes
         .map((note, index) => ({ note, index }))
-        .filter(({ note, index }) => !claimed.has(index) && reviserNoteMatchesChange(note, change));
-      if (!matches.length) return { ...change, revisionReason: null };
+        .filter(({ note, index }) => !claimed.has(index) && note.kind !== "owner_change_adjustment" && reviserNoteMatchesChange(note, change));
+      if (!matches.length) return { ...change, revisionReason: null, reviserAdjustment };
       matches.sort((left, right) => {
         const leftIds = (left.note.afterParagraphIds || []).filter((id) => changeAfterIds(change).has(id)).length;
         const rightIds = (right.note.afterParagraphIds || []).filter((id) => changeAfterIds(change).has(id)).length;
         return rightIds - leftIds || left.index - right.index;
       });
       claimed.add(matches[0].index);
-      return { ...change, revisionReason: matches[0].note.note.trim(), reviserNoteId: matches[0].note.id || null };
+      return {
+        ...change,
+        revisionReason: matches[0].note.note.trim(),
+        reviserNoteId: matches[0].note.id || null,
+        reviserAdjustment
+      };
     });
   }
 

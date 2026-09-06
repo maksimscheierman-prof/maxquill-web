@@ -49,6 +49,7 @@
     <span class="selection-preview" id="selection-preview"></span>
     <button type="button" data-selection-action="comment">Comment</button>
     <button type="button" data-selection-action="flag">Flag</button>
+    <button type="button" data-selection-action="change">Change</button>
   </div>
   <p class="selection-message" id="selection-message" role="status" hidden></p>
 
@@ -58,15 +59,30 @@
     <form method="dialog" id="annotation-form">
       <div class="panel-heading"><div><p class="eyebrow">Owner review note</p><h2 id="annotation-title">Add annotation</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close annotation editor">&times;</button></div>
       <blockquote id="annotation-quote"></blockquote>
-      <label for="annotation-type">Category</label>
-      <select id="annotation-type" name="category"><option value="wording">Wording</option><option value="clarity">Clarity</option><option value="pacing">Pacing</option><option value="dialogue">Dialogue</option><option value="continuity">Continuity</option><option value="canon">Canon</option><option value="style">Style</option><option value="other">Other</option></select>
-      <label for="annotation-comment">Comment</label>
-      <textarea id="annotation-comment" name="comment" rows="5" placeholder="What needs attention?" required></textarea>
-      <label for="annotation-status">Status</label>
-      <select id="annotation-status" name="status"><option value="open">Open</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="resolved">Resolved</option></select>
-      <label class="checkbox-label"><input id="requires-canon-change" name="requiresCanonChange" type="checkbox"> Requires canon change</label>
+      <div id="change-editor" class="change-editor" hidden>
+        <p class="change-field-label">Original</p>
+        <blockquote id="change-original" class="change-original"></blockquote>
+        <label for="annotation-replacement">Owner Change</label>
+        <textarea id="annotation-replacement" name="replacementText" rows="5" placeholder="Write the replacement text"></textarea>
+        <label for="annotation-comment">Optional note</label>
+        <textarea id="annotation-comment-change" name="changeNote" rows="3" placeholder="Why / context / instruction (optional)"></textarea>
+        <div id="change-ai-review" class="change-ai-review" hidden>
+          <p class="change-field-label">AI Review</p>
+          <p id="change-ai-summary" class="change-ai-summary"></p>
+          <blockquote id="change-ai-suggestion" class="change-ai-suggestion" hidden></blockquote>
+        </div>
+      </div>
+      <div id="comment-editor">
+        <label for="annotation-type">Category</label>
+        <select id="annotation-type" name="category"><option value="wording">Wording</option><option value="clarity">Clarity</option><option value="pacing">Pacing</option><option value="dialogue">Dialogue</option><option value="continuity">Continuity</option><option value="canon">Canon</option><option value="style">Style</option><option value="other">Other</option></select>
+        <label for="annotation-comment">Comment</label>
+        <textarea id="annotation-comment" name="comment" rows="5" placeholder="What needs attention?" required></textarea>
+        <label for="annotation-status">Status</label>
+        <select id="annotation-status" name="status"><option value="open">Open</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="resolved">Resolved</option></select>
+        <label class="checkbox-label"><input id="requires-canon-change" name="requiresCanonChange" type="checkbox"> Requires canon change</label>
+      </div>
       <p class="form-message" id="annotation-message" role="alert" hidden></p>
-      <div class="dialog-actions"><button class="danger-button" type="button" id="delete-annotation" hidden>Delete</button><button type="button" data-close-dialog>Cancel</button><button class="save-button" type="submit">Save note</button></div>
+      <div class="dialog-actions"><button class="danger-button" type="button" id="delete-annotation" hidden>Delete</button><button type="button" data-close-dialog>Cancel</button><button class="save-button" type="submit" id="annotation-save">Save note</button></div>
     </form>
   </dialog>
 
@@ -96,6 +112,7 @@
   <script src="companion-contract.js" defer></script>
   <script src="companion.js" defer></script>
   <script src="selection-logic.js" defer></script>
+  <script src="owner-change-review.js" defer></script>
   <script src="review-api.js" defer></script>
   <script src="review-submit-flow.js" defer></script>
   <script src="revision-diff.js" defer></script>

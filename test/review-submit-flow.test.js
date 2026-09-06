@@ -104,7 +104,11 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /ownerAnnotationBadge|revision-owner-selection/);
   assert.match(script, /revision-note-field-label", "Selected"/);
   assert.match(script, /quote\.className = "revision-note-quote"/);
-  assert.match(script, /revision-note-field-label", MaxQuillRevisionReview\.ownerAnnotationKind\(note\) === "flag" \? "Flag" : "Comment"/);
+  assert.match(script, /revision-note-field-label", kind === "flag" \? "Flag" : "Comment"|ownerAnnotationKind\(note\) === "flag" \? "Flag" : "Comment"|Requested replacement/);
+  assert.match(script, /data-selection-action="change"|openChangeEditor|annotationKind: "change"/);
+  assert.match(script, /OWNER CHANGE|ownerChange|Requested replacement/);
+  assert.match(script, /reviserAdjustment|REVISER ADJUSTMENT/);
+  assert.match(script, /MaxQuillOwnerChangeReview|aiReview/);
   assert.match(script, /is-revision-changes/);
   assert.match(script, /dataset\.revisionView/);
   assert.match(script, /layout\.additionalNote|additionalNote/);

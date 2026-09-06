@@ -9,15 +9,17 @@
   const OPTIONAL_REVIEW_READY_FIELDS = ["reviserNotes"];
   const PARAGRAPH_FIELDS = ["id", "text"];
   const REVISER_NOTE_FIELDS = ["id", "note"];
-  const OPTIONAL_REVISER_NOTE_FIELDS = ["afterParagraphIds", "afterQuote"];
+  const OPTIONAL_REVISER_NOTE_FIELDS = ["afterParagraphIds", "afterQuote", "sourceOwnerNoteId", "kind"];
   const OWNER_REVIEW_FIELDS = ["schemaVersion", "type", "source", "bookId", "chapterId", "chapterNumber", "chapterVersion", "reviewedAt", "reviewStatus", "annotations"];
   const ANNOTATION_FIELDS = ["id", "paragraphId", "selectedText", "selectionStart", "selectionEnd", "category", "comment", "status", "requiresCanonChange"];
   const TITLE_ANNOTATION_FIELDS = ["id", "target", "selectedText", "category", "comment", "status", "requiresCanonChange"];
-  const OPTIONAL_ANNOTATION_FIELDS = ["revisionChangeId", "revisionFeedbackKind", "sourceOwnerNoteId", "annotationKind"];
+  const OPTIONAL_ANNOTATION_FIELDS = ["revisionChangeId", "revisionFeedbackKind", "sourceOwnerNoteId", "annotationKind", "replacementText", "aiReview"];
   const CATEGORIES = ["wording", "clarity", "pacing", "dialogue", "continuity", "canon", "style", "other"];
   const ANNOTATION_STATUSES = ["open", "accepted", "rejected", "resolved"];
   const REVISION_FEEDBACK_KINDS = ["comment", "flag"];
-  const ANNOTATION_KINDS = ["comment", "flag"];
+  const ANNOTATION_KINDS = ["comment", "flag", "change"];
+  const REVISER_NOTE_KINDS = ["independent", "owner_change_adjustment"];
+  const AI_REVIEW_STATUSES = ["LOOKS_GOOD", "MINOR_CONCERN", "LOGIC_CONCERN", "CANON_CONFLICT", "CONTINUITY_CONCERN", "REVEAL_RISK", "STYLE_CONCERN", "NEEDS_CONTEXT", "PENDING"];
   const CHAPTER_TITLE_TARGET = "chapter_title";
 
   function isChapterTitleAnnotation(value) {
@@ -69,7 +71,54 @@
       if (note.afterQuote != null && (typeof note.afterQuote !== "string" || !note.afterQuote.trim())) {
         errors.push(`${label}[${index}].afterQuote must be a non-empty string when present.`);
       }
+      if (note.sourceOwnerNoteId != null && (typeof note.sourceOwnerNoteId !== "string" || !note.sourceOwnerNoteId.trim())) {
+        errors.push(`${label}[${index}].sourceOwnerNoteId must be a non-empty string when present.`);
+      }
+      if (note.kind != null && !REVISER_NOTE_KINDS.includes(note.kind)) {
+        errors.push(`${label}[${index}].kind is invalid.`);
+      }
     });
+  }
+
+  function validateAiReview(aiReview, label, errors) {
+    if (aiReview == null) return;
+    if (!aiReview || typeof aiReview !== "object" || Array.isArray(aiReview)) {
+      errors.push(`${label} must be an object when present.`);
+      return;
+    }
+    const keys = Object.keys(aiReview);
+    const permitted = new Set(["status", "summary", "suggestion"]);
+    keys.filter((key) => !permitted.has(key)).forEach((key) => errors.push(`${label} contains unknown field "${key}".`));
+    if (!AI_REVIEW_STATUSES.includes(aiReview.status)) errors.push(`${label}.status is invalid.`);
+    if (typeof aiReview.summary !== "string" || !aiReview.summary.trim()) errors.push(`${label}.summary must be a non-empty string.`);
+    if (aiReview.suggestion != null && (typeof aiReview.suggestion !== "string" || !aiReview.suggestion.trim())) {
+      errors.push(`${label}.suggestion must be a non-empty string when present.`);
+    }
+  }
+
+  function validateAnnotationKindFields(annotation, index, errors, { allowChange = true } = {}) {
+    if (annotation.annotationKind != null && !ANNOTATION_KINDS.includes(annotation.annotationKind)) {
+      errors.push(`annotations[${index}].annotationKind is invalid.`);
+    }
+    const isChange = annotation.annotationKind === "change";
+    if (isChange && !allowChange) {
+      errors.push(`annotations[${index}].annotationKind "change" is not supported for this annotation target.`);
+      return;
+    }
+    if (isChange) {
+      if (typeof annotation.replacementText !== "string" || !annotation.replacementText.trim()) {
+        errors.push(`annotations[${index}].replacementText must be a non-empty string for Owner Change.`);
+      } else if (annotation.replacementText.trim() === String(annotation.selectedText || "").trim()) {
+        errors.push(`annotations[${index}].replacementText must differ from selectedText.`);
+      }
+      if (typeof annotation.comment !== "string") errors.push(`annotations[${index}].comment must be a string.`);
+    } else if (typeof annotation.comment !== "string" || !annotation.comment.trim()) {
+      errors.push(`annotations[${index}].comment must be non-empty.`);
+    }
+    if (annotation.replacementText != null && !isChange) {
+      errors.push(`annotations[${index}].replacementText is only valid for annotationKind "change".`);
+    }
+    validateAiReview(annotation.aiReview, `annotations[${index}].aiReview`, errors);
   }
 
   function validateReviewReadyPackage(pkg) {
@@ -128,11 +177,10 @@
           else annotationIds.add(annotation.id);
           if (annotation.selectedText !== sourcePackage?.title) errors.push(`annotations[${index}].selectedText must match the chapter title.`);
           if (!CATEGORIES.includes(annotation.category)) errors.push(`annotations[${index}].category is invalid.`);
-          if (typeof annotation.comment !== "string" || !annotation.comment.trim()) errors.push(`annotations[${index}].comment must be non-empty.`);
           if (!ANNOTATION_STATUSES.includes(annotation.status)) errors.push(`annotations[${index}].status is invalid.`);
           if (typeof annotation.requiresCanonChange !== "boolean") errors.push(`annotations[${index}].requiresCanonChange must be Boolean.`);
           if (annotation.revisionFeedbackKind != null && !REVISION_FEEDBACK_KINDS.includes(annotation.revisionFeedbackKind)) errors.push(`annotations[${index}].revisionFeedbackKind is invalid.`);
-          if (annotation.annotationKind != null && !ANNOTATION_KINDS.includes(annotation.annotationKind)) errors.push(`annotations[${index}].annotationKind is invalid.`);
+          validateAnnotationKindFields(annotation, index, errors, { allowChange: false });
           return;
         }
         exactFields(annotation, ANNOTATION_FIELDS, `annotations[${index}]`, errors, OPTIONAL_ANNOTATION_FIELDS);
@@ -147,15 +195,14 @@
         if (!Number.isInteger(annotation.selectionEnd) || annotation.selectionEnd <= annotation.selectionStart) errors.push(`annotations[${index}].selectionEnd must be greater than selectionStart.`);
         if (typeof text === "string" && Number.isInteger(annotation.selectionStart) && Number.isInteger(annotation.selectionEnd) && (annotation.selectionEnd > text.length || text.substring(annotation.selectionStart, annotation.selectionEnd) !== annotation.selectedText)) errors.push(`annotations[${index}] selection offsets do not match selectedText.`);
         if (!CATEGORIES.includes(annotation.category)) errors.push(`annotations[${index}].category is invalid.`);
-        if (typeof annotation.comment !== "string" || !annotation.comment.trim()) errors.push(`annotations[${index}].comment must be non-empty.`);
         if (!ANNOTATION_STATUSES.includes(annotation.status)) errors.push(`annotations[${index}].status is invalid.`);
         if (typeof annotation.requiresCanonChange !== "boolean") errors.push(`annotations[${index}].requiresCanonChange must be Boolean.`);
         if (annotation.revisionFeedbackKind != null && !REVISION_FEEDBACK_KINDS.includes(annotation.revisionFeedbackKind)) errors.push(`annotations[${index}].revisionFeedbackKind is invalid.`);
-        if (annotation.annotationKind != null && !ANNOTATION_KINDS.includes(annotation.annotationKind)) errors.push(`annotations[${index}].annotationKind is invalid.`);
+        validateAnnotationKindFields(annotation, index, errors, { allowChange: true });
       });
     }
     return result(errors);
   }
 
-  return { CATEGORIES, ANNOTATION_STATUSES, ANNOTATION_KINDS, CHAPTER_TITLE_TARGET, TITLE_ANNOTATION_FIELDS, OPTIONAL_ANNOTATION_FIELDS, REVISION_FEEDBACK_KINDS, isChapterTitleAnnotation, validateReviewReadyPackage, validateOwnerReviewPackage };
+  return { CATEGORIES, ANNOTATION_STATUSES, ANNOTATION_KINDS, AI_REVIEW_STATUSES, REVISER_NOTE_KINDS, CHAPTER_TITLE_TARGET, TITLE_ANNOTATION_FIELDS, OPTIONAL_ANNOTATION_FIELDS, REVISION_FEEDBACK_KINDS, isChapterTitleAnnotation, validateReviewReadyPackage, validateOwnerReviewPackage };
 });

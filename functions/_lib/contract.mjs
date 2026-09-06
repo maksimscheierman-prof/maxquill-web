@@ -1,13 +1,17 @@
 const OWNER_FIELDS = ["schemaVersion", "type", "source", "bookId", "chapterId", "chapterNumber", "chapterVersion", "reviewedAt", "reviewStatus", "annotations"];
 const ANNOTATION_FIELDS = ["id", "paragraphId", "selectedText", "selectionStart", "selectionEnd", "category", "comment", "status", "requiresCanonChange"];
 const TITLE_ANNOTATION_FIELDS = ["id", "target", "selectedText", "category", "comment", "status", "requiresCanonChange"];
+const OPTIONAL_ANNOTATION_FIELDS = ["revisionChangeId", "revisionFeedbackKind", "sourceOwnerNoteId", "annotationKind", "replacementText", "aiReview"];
 const REVIEW_READY_FIELDS = ["schemaVersion", "type", "bookId", "chapterId", "chapterNumber", "chapterVersion", "status", "title", "exportedAt", "content"];
 const OPTIONAL_REVIEW_READY_FIELDS = ["reviserNotes"];
 const PARAGRAPH_FIELDS = ["id", "text"];
 const REVISER_NOTE_FIELDS = ["id", "note"];
-const OPTIONAL_REVISER_NOTE_FIELDS = ["afterParagraphIds", "afterQuote"];
+const OPTIONAL_REVISER_NOTE_FIELDS = ["afterParagraphIds", "afterQuote", "sourceOwnerNoteId", "kind"];
 const CATEGORIES = new Set(["wording", "clarity", "pacing", "dialogue", "continuity", "canon", "style", "other"]);
 const NOTE_STATUSES = new Set(["open", "accepted", "rejected", "resolved"]);
+const ANNOTATION_KINDS = new Set(["comment", "flag", "change"]);
+const REVISER_NOTE_KINDS = new Set(["independent", "owner_change_adjustment"]);
+const AI_REVIEW_STATUSES = new Set(["LOOKS_GOOD", "MINOR_CONCERN", "LOGIC_CONCERN", "CANON_CONFLICT", "CONTINUITY_CONCERN", "REVEAL_RISK", "STYLE_CONCERN", "NEEDS_CONTEXT", "PENDING"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 function exactFields(value, allowed, errors, optional = []) {
@@ -19,6 +23,29 @@ function exactFields(value, allowed, errors, optional = []) {
 }
 function iso(value) { return typeof value === "string" && ISO_DATE.test(value) && !Number.isNaN(Date.parse(value)); }
 function positive(value) { return Number.isInteger(value) && value > 0; }
+
+function validateAiReview(aiReview, errors) {
+  if (aiReview == null) return;
+  if (!aiReview || typeof aiReview !== "object" || Array.isArray(aiReview)) { errors.push("aiReview must be an object."); return; }
+  const keys = Object.keys(aiReview);
+  if (keys.some((key) => !["status", "summary", "suggestion"].includes(key))) errors.push("aiReview fields are invalid.");
+  if (!AI_REVIEW_STATUSES.has(aiReview.status) || typeof aiReview.summary !== "string" || !aiReview.summary.trim()) errors.push("aiReview values are invalid.");
+  if (aiReview.suggestion != null && (typeof aiReview.suggestion !== "string" || !aiReview.suggestion.trim())) errors.push("aiReview.suggestion is invalid.");
+}
+
+function validateAnnotationValues(note, errors, { allowChange = true } = {}) {
+  if (!CATEGORIES.has(note.category) || !NOTE_STATUSES.has(note.status) || typeof note.requiresCanonChange !== "boolean") errors.push("Invalid annotation values.");
+  if (note.annotationKind != null && !ANNOTATION_KINDS.has(note.annotationKind)) errors.push("Invalid annotationKind.");
+  const isChange = note.annotationKind === "change";
+  if (isChange && !allowChange) errors.push("Owner Change is not supported for this annotation target.");
+  if (isChange) {
+    if (typeof note.replacementText !== "string" || !note.replacementText.trim()) errors.push("replacementText is required for Owner Change.");
+    else if (note.replacementText.trim() === String(note.selectedText || "").trim()) errors.push("replacementText must differ from selectedText.");
+    if (typeof note.comment !== "string") errors.push("Invalid annotation comment.");
+  } else if (typeof note.comment !== "string" || !note.comment.trim()) errors.push("Invalid annotation comment.");
+  if (note.replacementText != null && !isChange) errors.push("replacementText is only valid for annotationKind change.");
+  validateAiReview(note.aiReview, errors);
+}
 
 function validateReviserNotes(notes, content, errors) {
   if (notes == null) return;
@@ -40,6 +67,8 @@ function validateReviserNotes(notes, content, errors) {
       }
     }
     if (note.afterQuote != null && (typeof note.afterQuote !== "string" || !note.afterQuote.trim())) errors.push("afterQuote must be a non-empty string when present.");
+    if (note.sourceOwnerNoteId != null && (typeof note.sourceOwnerNoteId !== "string" || !note.sourceOwnerNoteId.trim())) errors.push("sourceOwnerNoteId is invalid.");
+    if (note.kind != null && !REVISER_NOTE_KINDS.has(note.kind)) errors.push("reviserNote kind is invalid.");
   }
 }
 
@@ -53,16 +82,16 @@ export function validateOwnerReview(pkg) {
     const ids = new Set();
     for (const note of pkg.annotations) {
       if (note?.target === "chapter_title") {
-        if (!exactFields(note, TITLE_ANNOTATION_FIELDS, errors)) continue;
+        if (!exactFields(note, TITLE_ANNOTATION_FIELDS, errors, OPTIONAL_ANNOTATION_FIELDS)) continue;
         if (typeof note.id !== "string" || !note.id.trim() || ids.has(note.id)) errors.push("Annotation IDs must be non-empty and unique."); else ids.add(note.id);
         if (typeof note.selectedText !== "string" || !note.selectedText) errors.push("Invalid annotation selection.");
-        if (!CATEGORIES.has(note.category) || typeof note.comment !== "string" || !note.comment.trim() || !NOTE_STATUSES.has(note.status) || typeof note.requiresCanonChange !== "boolean") errors.push("Invalid annotation values.");
+        validateAnnotationValues(note, errors, { allowChange: false });
         continue;
       }
-      if (!exactFields(note, ANNOTATION_FIELDS, errors)) continue;
+      if (!exactFields(note, ANNOTATION_FIELDS, errors, OPTIONAL_ANNOTATION_FIELDS)) continue;
       if (typeof note.id !== "string" || !note.id.trim() || ids.has(note.id)) errors.push("Annotation IDs must be non-empty and unique."); else ids.add(note.id);
       if (!/^p\d{3}$/.test(note.paragraphId || "") || typeof note.selectedText !== "string" || !note.selectedText || !Number.isInteger(note.selectionStart) || note.selectionStart < 0 || !Number.isInteger(note.selectionEnd) || note.selectionEnd <= note.selectionStart || note.selectionEnd - note.selectionStart !== note.selectedText.length) errors.push("Invalid annotation selection.");
-      if (!CATEGORIES.has(note.category) || typeof note.comment !== "string" || !note.comment.trim() || !NOTE_STATUSES.has(note.status) || typeof note.requiresCanonChange !== "boolean") errors.push("Invalid annotation values.");
+      validateAnnotationValues(note, errors, { allowChange: true });
     }
   }
   return { valid: errors.length === 0, errors };

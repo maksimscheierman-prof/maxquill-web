@@ -479,7 +479,8 @@
   }
 
   function ownerAnnotationKind(note) {
-    if (note?.annotationKind === "flag" || note?.annotationKind === "comment") return note.annotationKind;
+    if (note?.annotationKind === "flag" || note?.annotationKind === "comment" || note?.annotationKind === "change") return note.annotationKind;
+    if (typeof note?.replacementText === "string" && note.replacementText.trim()) return "change";
     if (/^flagged(\b|\s)/i.test(String(note?.comment || "").trim())) return "flag";
     return "comment";
   }
@@ -500,7 +501,10 @@
   }
 
   function ownerAnnotationKindLabel(note) {
-    return ownerAnnotationKind(note) === "flag" ? "FLAG" : "COMMENT";
+    const kind = ownerAnnotationKind(note);
+    if (kind === "flag") return "FLAG";
+    if (kind === "change") return "CHANGE";
+    return "COMMENT";
   }
 
   function ownerAnnotationBadge(note) {
@@ -544,9 +548,14 @@
         new: "New Version",
         old: "Old Version",
         ownerNote: "Owner Review Note",
+        ownerChange: "OWNER CHANGE",
         additional: "Additional Revision Change",
         revisionFeedback: "Revision Review Feedback",
-        reviserReason: "Reviser reason"
+        reviserReason: "Reviser reason",
+        reviserAdjustment: "REVISER ADJUSTMENT",
+        requestedReplacement: "Requested replacement",
+        ownerNoteField: "Owner note",
+        aiReview: "AI review"
       },
       additionalNote: "No Owner Review Note — this change was made independently by the reviser.",
       kindBadgeSecondary: true

@@ -265,9 +265,10 @@
     const layout = MaxQuillRevisionReview.revisionComparisonLayout();
     const reviews = change.ownerReviews || (change.annotation ? [change.annotation] : []);
     const hasOwnerNote = Boolean(reviews.length);
-    const side = node("div", `revision-side revision-side-note${hasOwnerNote ? "" : " is-additional"}`);
+    const hasOwnerChange = reviews.some((note) => MaxQuillRevisionReview.ownerAnnotationKind(note) === "change");
+    const side = node("div", `revision-side revision-side-note${hasOwnerNote ? "" : " is-additional"}${hasOwnerChange ? " is-owner-change" : ""}`);
     side.dataset.column = "ownerNote";
-    side.append(node("span", "revision-side-label", hasOwnerNote ? layout.labels.ownerNote : layout.labels.additional));
+    side.append(node("span", "revision-side-label", hasOwnerChange ? layout.labels.ownerChange : (hasOwnerNote ? layout.labels.ownerNote : layout.labels.additional)));
     if (!hasOwnerNote) {
       side.append(node("p", "revision-additional-note", layout.additionalNote));
       if (change.revisionReason) {
@@ -284,20 +285,66 @@
     for (const note of reviews) {
       const block = node("div", "revision-review");
       block.append(node("p", "revision-note-category", MaxQuillRevisionReview.ownerAnnotationBadge(note)));
-      const selectedText = note.selectedText || note.quote || "";
-      if (selectedText) {
-        block.append(node("p", "revision-note-field-label", "Selected"));
-        const quote = document.createElement("q");
-        quote.className = "revision-note-quote";
-        quote.textContent = selectedText;
-        block.append(quote);
+      const kind = MaxQuillRevisionReview.ownerAnnotationKind(note);
+      if (kind === "change") {
+        const selectedText = note.selectedText || note.quote || "";
+        if (selectedText) {
+          block.append(node("p", "revision-note-field-label", "Original"));
+          const quote = document.createElement("q");
+          quote.className = "revision-note-quote";
+          quote.textContent = selectedText;
+          block.append(quote);
+        }
+        block.append(node("p", "revision-note-field-label", layout.labels.requestedReplacement || "Requested replacement"));
+        const replacement = document.createElement("blockquote");
+        replacement.className = "revision-note-comment revision-owner-change";
+        replacement.textContent = note.replacementText || "";
+        block.append(replacement);
+        if (note.comment && note.comment.trim()) {
+          block.append(node("p", "revision-note-field-label", layout.labels.ownerNoteField || "Owner note"));
+          const comment = document.createElement("blockquote");
+          comment.className = "revision-note-comment";
+          comment.textContent = note.comment;
+          block.append(comment);
+        }
+        const ai = window.MaxQuillOwnerChangeReview?.formatAiReview?.(note.aiReview);
+        if (ai) {
+          block.append(node("p", "revision-note-field-label", layout.labels.aiReview || "AI review"));
+          const summary = document.createElement("blockquote");
+          summary.className = "revision-note-comment revision-ai-review";
+          summary.textContent = ai.summary;
+          block.append(summary);
+          if (ai.suggestion) {
+            block.append(node("p", "revision-note-field-label", "AI SUGGESTION"));
+            const suggestion = document.createElement("blockquote");
+            suggestion.className = "revision-note-comment revision-ai-suggestion";
+            suggestion.textContent = ai.suggestion;
+            block.append(suggestion);
+          }
+        }
+      } else {
+        const selectedText = note.selectedText || note.quote || "";
+        if (selectedText) {
+          block.append(node("p", "revision-note-field-label", "Selected"));
+          const quote = document.createElement("q");
+          quote.className = "revision-note-quote";
+          quote.textContent = selectedText;
+          block.append(quote);
+        }
+        block.append(node("p", "revision-note-field-label", kind === "flag" ? "Flag" : "Comment"));
+        const comment = document.createElement("blockquote");
+        comment.className = "revision-note-comment";
+        comment.textContent = note.comment;
+        block.append(comment);
       }
-      block.append(node("p", "revision-note-field-label", MaxQuillRevisionReview.ownerAnnotationKind(note) === "flag" ? "Flag" : "Comment"));
-      const comment = document.createElement("blockquote");
-      comment.className = "revision-note-comment";
-      comment.textContent = note.comment;
-      block.append(comment);
       side.append(block);
+    }
+    if (change.reviserAdjustment) {
+      side.append(node("p", "revision-note-field-label", layout.labels.reviserAdjustment || "REVISER ADJUSTMENT"));
+      const adjustment = document.createElement("blockquote");
+      adjustment.className = "revision-note-comment revision-reviser-adjustment";
+      adjustment.textContent = change.reviserAdjustment;
+      side.append(adjustment);
     }
     if (decision?.feedbackNotes?.length) appendRevisionFeedbackInto(side, decision.feedbackNotes, layout);
     else if (decision?.state && decision.state !== "unresolved") {
@@ -766,11 +813,75 @@
   }
   function handleTextSelection(delay = 320) { clearTimeout(selectionTimer); selectionTimer = setTimeout(readSelectionState, delay); }
   function annotationId() { return crypto.randomUUID ? `annotation-${crypto.randomUUID()}` : `annotation-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+  function setEditorMode(mode) {
+    const changeMode = mode === "change";
+    document.querySelector("#change-editor").hidden = !changeMode;
+    document.querySelector("#comment-editor").hidden = changeMode;
+    document.querySelector("#annotation-comment").required = !changeMode;
+    document.querySelector("#annotation-save").textContent = changeMode ? "Save Change" : "Save note";
+    document.querySelector("#annotation-quote").hidden = changeMode;
+  }
+  function surroundingForSelection(selection) {
+    if (!selection?.paragraphId || !sourcePackage) return { before: "", after: "" };
+    const index = sourcePackage.content.findIndex((item) => item.id === selection.paragraphId);
+    if (index < 0) return { before: "", after: "" };
+    return {
+      before: sourcePackage.content[index - 1]?.text || "",
+      after: sourcePackage.content[index + 1]?.text || ""
+    };
+  }
+  function renderChangeAiReview(aiReview) {
+    const box = document.querySelector("#change-ai-review");
+    const summary = document.querySelector("#change-ai-summary");
+    const suggestion = document.querySelector("#change-ai-suggestion");
+    const formatted = window.MaxQuillOwnerChangeReview?.formatAiReview?.(aiReview);
+    if (!formatted) {
+      box.hidden = true;
+      summary.textContent = "";
+      suggestion.hidden = true;
+      suggestion.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    summary.textContent = formatted.summary;
+    if (formatted.suggestion) {
+      suggestion.hidden = false;
+      suggestion.textContent = `AI SUGGESTION: ${formatted.suggestion}`;
+    } else {
+      suggestion.hidden = true;
+      suggestion.textContent = "";
+    }
+  }
   function openEditor(note = null, defaultCategory = "wording") {
     if (showingOriginalNotes() || isSubmittedLocked()) { document.querySelector("#review-panel").showModal(); return; }
     editingId = note?.id || null; const source = note || pendingSelection; if (!source) return; showMessage("#annotation-message", "");
-    document.querySelector("#annotation-title").textContent = note ? "Edit annotation" : (source.target === "chapter_title" ? "Chapter title" : "Add annotation");
-    document.querySelector("#annotation-quote").textContent = (source.target === "chapter_title" || note?.target === "chapter_title") ? `Chapter title: “${source.selectedText || sourcePackage.title}”` : `“${source.selectedText}”`; document.querySelector("#annotation-type").value = note?.category || defaultCategory; document.querySelector("#annotation-comment").value = note?.comment || ""; document.querySelector("#annotation-status").value = note?.status || "open"; document.querySelector("#requires-canon-change").checked = note?.requiresCanonChange || false; document.querySelector("#delete-annotation").hidden = !note; document.querySelector("#annotation-dialog").showModal(); document.querySelector("#annotation-comment").focus();
+    const mode = (note && MaxQuillRevisionReview.ownerAnnotationKind(note) === "change") || source.annotationKind === "change" || pendingSelection?.annotationKind === "change" ? "change" : "comment";
+    if (mode === "change" && (source.target === "chapter_title" || note?.target === "chapter_title")) {
+      showMessage("#selection-message", "Owner Change applies to chapter body selections, not the title.");
+      return;
+    }
+    setEditorMode(mode);
+    document.querySelector("#annotation-title").textContent = note
+      ? (mode === "change" ? "Edit Owner Change" : "Edit annotation")
+      : (mode === "change" ? "Owner Change" : (source.target === "chapter_title" ? "Chapter title" : "Add annotation"));
+    document.querySelector("#annotation-quote").textContent = (source.target === "chapter_title" || note?.target === "chapter_title") ? `Chapter title: “${source.selectedText || sourcePackage.title}”` : `“${source.selectedText}”`;
+    document.querySelector("#annotation-type").value = note?.category || defaultCategory;
+    document.querySelector("#annotation-status").value = note?.status || "open";
+    document.querySelector("#requires-canon-change").checked = note?.requiresCanonChange || false;
+    document.querySelector("#delete-annotation").hidden = !note;
+    if (mode === "change") {
+      document.querySelector("#change-original").textContent = source.selectedText || note?.selectedText || "";
+      document.querySelector("#annotation-replacement").value = note?.replacementText || source.selectedText || "";
+      document.querySelector("#annotation-comment-change").value = note?.comment || "";
+      renderChangeAiReview(note?.aiReview || null);
+      document.querySelector("#annotation-dialog").showModal();
+      document.querySelector("#annotation-replacement").focus();
+      return;
+    }
+    document.querySelector("#annotation-comment").value = note?.comment || "";
+    renderChangeAiReview(null);
+    document.querySelector("#annotation-dialog").showModal();
+    document.querySelector("#annotation-comment").focus();
   }
   function buildOwnerReviewPackage(annotations = review.annotations) { return { schemaVersion: 1, type: "owner_review", source: "owner", bookId: sourcePackage.bookId, chapterId: sourcePackage.chapterId, chapterNumber: sourcePackage.chapterNumber, chapterVersion: sourcePackage.chapterVersion, reviewedAt: review.reviewedAt || new Date().toISOString(), reviewStatus: "completed", annotations: annotations.map((note) => ({ ...note })) }; }
   function saveAnnotation(event) {
@@ -779,13 +890,47 @@
     const revisionChangeId = selection.revisionChangeId || existing?.revisionChangeId || null;
     let revisionFeedbackKind = selection.revisionFeedbackKind || existing?.revisionFeedbackKind || (revisionChangeId ? "comment" : null);
     const sourceOwnerNoteId = selection.sourceOwnerNoteId || existing?.sourceOwnerNoteId || null;
-    const annotationKind = selection.annotationKind || existing?.annotationKind || (selection.revisionFeedbackKind === "flag" || revisionFeedbackKind === "flag" ? "flag" : (existing || pendingSelection ? "comment" : null));
-    const annotation = isTitle
-      ? { id: existing?.id || annotationId(), target: "chapter_title", selectedText: sourcePackage.title, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked }
-      : { id: existing?.id || annotationId(), paragraphId: selection.paragraphId, selectedText: selection.selectedText, selectionStart: selection.selectionStart, selectionEnd: selection.selectionEnd, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked };
-    if (annotationKind === "flag" || annotationKind === "comment") annotation.annotationKind = annotationKind;
-    else if (/^flagged(\b|\s)/i.test(annotation.comment)) annotation.annotationKind = "flag";
-    else annotation.annotationKind = "comment";
+    const requestedKind = selection.annotationKind || existing?.annotationKind || pendingSelection?.annotationKind || null;
+    const isChange = requestedKind === "change" || (!isTitle && Boolean(document.querySelector("#change-editor") && !document.querySelector("#change-editor").hidden));
+    let annotation;
+    if (isChange) {
+      if (isTitle) { showMessage("#annotation-message", "Owner Change is not available for chapter titles."); return; }
+      const replacementText = document.querySelector("#annotation-replacement").value;
+      const validation = window.MaxQuillOwnerChangeReview?.validateReplacement?.(selection.selectedText, replacementText);
+      if (validation && !validation.valid) { showMessage("#annotation-message", validation.error); return; }
+      const surround = surroundingForSelection(selection);
+      const aiReview = window.MaxQuillOwnerChangeReview?.assessOwnerChange?.({
+        original: selection.selectedText,
+        replacement: replacementText,
+        surroundingBefore: surround.before,
+        surroundingAfter: surround.after,
+        note: document.querySelector("#annotation-comment-change").value.trim()
+      }) || null;
+      annotation = {
+        id: existing?.id || annotationId(),
+        paragraphId: selection.paragraphId,
+        selectedText: selection.selectedText,
+        selectionStart: selection.selectionStart,
+        selectionEnd: selection.selectionEnd,
+        category: document.querySelector("#annotation-type").value || "wording",
+        comment: document.querySelector("#annotation-comment-change").value.trim(),
+        status: document.querySelector("#annotation-status").value || "open",
+        requiresCanonChange: document.querySelector("#requires-canon-change").checked || false,
+        annotationKind: "change",
+        replacementText: replacementText.trim(),
+        ...(aiReview ? { aiReview } : {})
+      };
+      renderChangeAiReview(aiReview);
+    } else {
+      annotation = isTitle
+        ? { id: existing?.id || annotationId(), target: "chapter_title", selectedText: sourcePackage.title, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked }
+        : { id: existing?.id || annotationId(), paragraphId: selection.paragraphId, selectedText: selection.selectedText, selectionStart: selection.selectionStart, selectionEnd: selection.selectionEnd, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked };
+      const annotationKind = requestedKind || (selection.revisionFeedbackKind === "flag" || revisionFeedbackKind === "flag" ? "flag" : (existing || pendingSelection ? "comment" : null));
+      if (annotationKind === "flag" || annotationKind === "comment") annotation.annotationKind = annotationKind;
+      else if (/^flagged(\b|\s)/i.test(annotation.comment)) annotation.annotationKind = "flag";
+      else annotation.annotationKind = "comment";
+      if (!annotation.comment) { showMessage("#annotation-message", "Add a comment before saving this note."); return; }
+    }
     if (revisionChangeId) {
       annotation.revisionChangeId = revisionChangeId;
       if (!revisionFeedbackKind || revisionFeedbackKind === "comment") {
@@ -795,7 +940,6 @@
       annotation.revisionFeedbackKind = revisionFeedbackKind === "flag" ? "flag" : "comment";
       if (sourceOwnerNoteId) annotation.sourceOwnerNoteId = sourceOwnerNoteId;
     }
-    if (!annotation.comment) { showMessage("#annotation-message", "Add a comment before saving this note."); return; }
     if (!isTitle) {
       const paragraph = sourcePackage.content.find((item) => item.id === annotation.paragraphId); if (!paragraph || paragraph.text.substring(annotation.selectionStart, annotation.selectionEnd) !== annotation.selectedText) { showMessage("#annotation-message", "This selection no longer matches the original paragraph. Select the text again."); return; }
     }
@@ -810,7 +954,16 @@
     openEditor(null, "other");
     document.querySelector("#annotation-comment").value = "Flagged for revision.";
   }
-  function closeEditor() { document.querySelector("#annotation-dialog").close(); hideSelectionActions(true); window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; actionEngaged = false; }
+  function openChangeEditor() {
+    if (!pendingSelection) return;
+    if (pendingSelection.target === "chapter_title") {
+      showMessage("#selection-message", "Owner Change applies to chapter body selections, not the title.");
+      return;
+    }
+    pendingSelection = { ...pendingSelection, annotationKind: "change" };
+    openEditor(null, "wording");
+  }
+  function closeEditor() { document.querySelector("#annotation-dialog").close(); setEditorMode("comment"); hideSelectionActions(true); window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; actionEngaged = false; }
   function deleteAnnotation() {
     if (showingOriginalNotes() || isSubmittedLocked() || !editingId) return;
     review.annotations = review.annotations.filter((note) => note.id !== editingId);
@@ -855,8 +1008,11 @@
     panelNotes.forEach((note, index) => {
       const item = document.createElement("li"); item.className = "review-note";
       item.innerHTML = '<button type="button" class="note-jump"><span></span><q></q><small></small></button>' + ((sourceNotes || locked) ? "" : '<button type="button" class="note-edit">Edit</button>');
-      item.querySelector("span").textContent = `${index + 1}. ${note.target === "chapter_title" ? "Chapter title" : note.category} · ${note.status}${note.requiresCanonChange ? " · Canon change" : ""}`;
-      item.querySelector("q").textContent = note.selectedText; item.querySelector("small").textContent = note.comment;
+      item.querySelector("span").textContent = `${index + 1}. ${note.target === "chapter_title" ? "Chapter title" : note.category} · ${MaxQuillRevisionReview.ownerAnnotationKindLabel(note)} · ${note.status}${note.requiresCanonChange ? " · Canon change" : ""}`;
+      item.querySelector("q").textContent = note.annotationKind === "change" && note.replacementText ? note.replacementText : note.selectedText;
+      item.querySelector("small").textContent = note.annotationKind === "change"
+        ? (note.comment?.trim() ? note.comment : (note.aiReview?.summary || "Owner Change"))
+        : note.comment;
       item.querySelector(".note-jump").addEventListener("click", () => {
         document.querySelector("#review-panel").close();
         if (locked && revisionContext) setSubmittedInspect(true);
@@ -1043,7 +1199,12 @@
       if (showingOriginalNotes()) { const note = originalNotes().find((item) => item.id === mark.dataset.annotationId); if (note) document.querySelector("#review-panel").showModal(); return; }
       openEditor(review.annotations.find((item) => item.id === mark.dataset.annotationId));
     });
-    actions.addEventListener("pointerdown", () => { actionEngaged = true; }); actions.addEventListener("click", (event) => { if (event.target.dataset.selectionAction === "comment") openEditor(); if (event.target.dataset.selectionAction === "flag") quickFlag(); actionEngaged = false; });
+    actions.addEventListener("pointerdown", () => { actionEngaged = true; }); actions.addEventListener("click", (event) => {
+      if (event.target.dataset.selectionAction === "comment") openEditor();
+      if (event.target.dataset.selectionAction === "flag") quickFlag();
+      if (event.target.dataset.selectionAction === "change") openChangeEditor();
+      actionEngaged = false;
+    });
     addEventListener("scroll", () => { hideSelectionActions(false); showMessage("#selection-message", ""); }, { passive: true }); addEventListener("resize", () => { hideSelectionActions(false); handleTextSelection(180); }); addEventListener("orientationchange", () => { hideSelectionActions(false); handleTextSelection(250); });
     const submitHandler = MaxQuillSubmitFlow.createSubmitHandler({ submitAction: submitReview, setSubmitting(value) { submitting = value; updateJobUi(); }, showUnexpectedError(message) { showMessage("#review-message", message); } });
     document.querySelector("#annotation-form").addEventListener("submit", saveAnnotation); document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeEditor)); document.querySelector("#delete-annotation").addEventListener("click", deleteAnnotation);
