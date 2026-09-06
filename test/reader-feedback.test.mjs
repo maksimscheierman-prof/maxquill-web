@@ -381,6 +381,49 @@ test("owner review submit/queue flow remains unchanged beside reader feedback", 
   assert.equal((await jobs.claim(first.job.jobId, { workerId: "worker-1" })).status, "CLAIMED");
 });
 
+test("client public invite helpers use Access-bypass paths", async () => {
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url);
+  const api = require("../reader-feedback-api.js");
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, method: options.method || "GET" });
+    return { ok: true, json: async () => ({ ok: true }) };
+  };
+  await api.getInvite("tok", fetchImpl);
+  await api.joinInvite("tok", "Anna", fetchImpl);
+  await api.createInvite({ bookId: "demo-book" }, fetchImpl);
+  await api.chapterOverview("demo-book", fetchImpl);
+  assert.equal(calls[0].url, "/api/public/invites/tok");
+  assert.equal(calls[1].url, "/api/public/invites/tok/join");
+  assert.equal(calls[1].method, "POST");
+  assert.equal(calls[2].url, "/api/invites");
+  assert.equal(calls[3].url, "/api/invites/overview?bookId=demo-book");
+});
+
+test("public invite routes do not require Cloudflare Access", async () => {
+  const getInvite = await import("../functions/api/public/invites/[token].js");
+  const joinInvite = await import("../functions/api/public/invites/[token]/join.js");
+  const getResponse = await getInvite.onRequest({
+    request: new Request("https://example.test/api/public/invites/tok"),
+    env: {},
+    params: { token: "tok" }
+  });
+  const joinResponse = await joinInvite.onRequest({
+    request: new Request("https://example.test/api/public/invites/tok/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "Anna" })
+    }),
+    env: {},
+    params: { token: "tok" }
+  });
+  assert.equal(getResponse.status, 500);
+  assert.equal(joinResponse.status, 500);
+  assert.equal((await getResponse.json()).error.code, "BACKEND_NOT_CONFIGURED");
+  assert.equal((await joinResponse.json()).error.code, "BACKEND_NOT_CONFIGURED");
+});
+
 test("client helper groups comments by text location", async () => {
   const { createRequire } = await import("node:module");
   const require = createRequire(import.meta.url);
@@ -400,8 +443,8 @@ test("reader invite and comment route modules load", async () => {
     import("../functions/api/invites.js"),
     import("../functions/api/invites/overview.js"),
     import("../functions/api/invites/comments.js"),
-    import("../functions/api/invites/[token].js"),
-    import("../functions/api/invites/[token]/join.js"),
+    import("../functions/api/public/invites/[token].js"),
+    import("../functions/api/public/invites/[token]/join.js"),
     import("../functions/api/reader/comments.js"),
     import("../functions/api/reader/finish.js"),
     import("../functions/api/reader-comments/[id]/resolve.js"),

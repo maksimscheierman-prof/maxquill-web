@@ -30,8 +30,8 @@ Friend invites reuse package fingerprints and selection offsets. They never queu
 - `POST /api/invites` / `GET /api/invites?bookId=` — verified owner; create or list invites.
 - `GET /api/invites/overview?bookId=` — verified owner; per-chapter reader comment stats.
 - `GET /api/invites/comments?...` — verified owner; all comments for one draft fingerprint.
-- `GET /api/invites/:token` — public; invite metadata + package URL for an active invite.
-- `POST /api/invites/:token/join` — public; display name → reviewer session token.
+- `GET /api/public/invites/:token` — public; invite metadata + package URL for an active invite.
+- `POST /api/public/invites/:token/join` — public; display name → reviewer session token.
 - `GET|POST /api/reader/comments` — reader session Bearer; list or add fingerprint-bound comments.
 - `POST /api/reader/finish` — reader session Bearer; mark reviewer finished.
 - `POST /api/reader-comments/:id/resolve` — verified owner; resolve one reader comment.
@@ -44,6 +44,8 @@ The backend stores the REVIEW_READY draft fingerprint separately from its own SH
 ## Authentication
 
 Protect the private MaxQuill hostname with Cloudflare Access. Owner endpoints verify the Access JWT signature, issuer, audience, and expiry using `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`. Do not put a long-lived owner secret in browser JavaScript.
+
+Keep owner invite APIs under `/api/invites*` inside Access. Bypass Access for `/api/public/invites/*` so reader join/metadata calls do not collide with owner-feedback fetches. Reader session routes under `/api/reader/*` stay outside the owner invite prefix.
 
 Worker endpoints additionally require `Authorization: Bearer <MAXQUILL_WORKER_TOKEN>`. Configure an Access service-token policy for the future worker as well, because Access remains the outer perimeter. Store `MAXQUILL_WORKER_TOKEN` as an encrypted Pages secret; never commit it.
 

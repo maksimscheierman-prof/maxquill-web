@@ -25,14 +25,14 @@
   }
 
   async function getInvite(token, fetchImpl = root.fetch) {
-    const response = await fetchImpl(`/api/invites/${encodeURIComponent(token)}`);
+    const response = await fetchImpl(`/api/public/invites/${encodeURIComponent(token)}`);
     const data = await responseJson(response);
     if (!response.ok) throw errorFrom(response, data, "Invite could not be loaded.");
     return data;
   }
 
   async function joinInvite(token, displayName, fetchImpl = root.fetch) {
-    const response = await fetchImpl(`/api/invites/${encodeURIComponent(token)}/join`, {
+    const response = await fetchImpl(`/api/public/invites/${encodeURIComponent(token)}/join`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ displayName })

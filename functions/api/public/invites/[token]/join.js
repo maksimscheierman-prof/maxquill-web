@@ -1,6 +1,6 @@
-import { readerService } from "../../../_lib/context.mjs";
-import { errorResponse, json, methodNotAllowed } from "../../../_lib/errors.mjs";
-import { readJson } from "../../../_lib/request.mjs";
+import { readerService } from "../../../../_lib/context.mjs";
+import { errorResponse, json, methodNotAllowed } from "../../../../_lib/errors.mjs";
+import { readJson } from "../../../../_lib/request.mjs";
 
 export const onRequest = async (context) => {
   try {
