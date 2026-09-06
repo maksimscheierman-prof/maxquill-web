@@ -165,10 +165,21 @@
     }
     parent.append(side);
   }
-  function appendOwnerReviews(card, reviews) {
-    if (!reviews?.length) return;
-    const section = node("div", "revision-owner-note");
-    section.append(node("p", "revision-side-label", "Owner Review Note"));
+  function appendReviewNoteColumn(parent, change, decision) {
+    const layout = MaxQuillRevisionReview.revisionComparisonLayout();
+    const reviews = change.ownerReviews || (change.annotation ? [change.annotation] : []);
+    const hasOwnerNote = Boolean(reviews.length) || change.origin === "owner_requested";
+    const side = node("div", `revision-side revision-side-note${hasOwnerNote ? "" : " is-additional"}`);
+    side.dataset.column = "ownerNote";
+    side.append(node("span", "revision-side-label", hasOwnerNote ? layout.labels.ownerNote : layout.labels.additional));
+    if (decision?.state && decision.state !== "unresolved") {
+      side.append(node("p", `revision-note-decision${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.state === "flagged" ? "Flagged" : decision.state === "needs_revision" ? "Needs revision" : "Accepted"));
+    }
+    if (!hasOwnerNote) {
+      side.append(node("p", "revision-additional-note", layout.additionalNote));
+      parent.append(side);
+      return;
+    }
     for (const note of reviews) {
       const block = node("div", "revision-review");
       block.append(node("p", "revision-note-category", note.category || "other"));
@@ -182,9 +193,9 @@
       comment.className = "revision-note-comment";
       comment.textContent = note.comment;
       block.append(comment);
-      section.append(block);
+      side.append(block);
     }
-    card.append(section);
+    parent.append(side);
   }
   function appendRevisionFeedback(card, feedbackNotes) {
     if (!feedbackNotes?.length) return;
@@ -200,12 +211,6 @@
       section.append(block);
     }
     card.append(section);
-  }
-  function appendDecisionStatus(card, decision) {
-    if (decision.state === "unresolved") return;
-    const status = node("p", `revision-decision-status${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted-status" : ""}`, decision.label);
-    status.dataset.decisionStatus = decision.state;
-    card.append(status);
   }
   function appendDecisionActions(actions, change, decision) {
     if (decision.showAccept) {
@@ -278,6 +283,7 @@
     const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${decision.accepted ? " is-accepted" : ""}${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}`);
     card.dataset.changeId = change.id;
     card.dataset.decision = decision.state;
+    card.dataset.origin = change.origin || "";
     if (change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id) card.dataset.sourceOwnerNoteId = change.sourceOwnerNoteId || change.ownerReviews[0].id;
     const header = node("div", "revision-change-header");
     const title = options.title || (change.origin === "owner_requested" ? "Revision" : "Additional revision change");
@@ -287,13 +293,11 @@
     headerMeta.append(node("span", "revision-kind-badge", kindLabel(change.kind)));
     header.append(headerMeta);
     card.append(header);
-    if (change.origin === "additional_revision") card.append(node("p", "revision-origin", originLabel(change.origin)));
-    appendDecisionStatus(card, decision);
     const pair = node("div", "revision-pair");
     appendSide(pair, "New Version", change.after, change.afterContext, change.inline, "inserted", change.after?.id || null, null);
     appendSide(pair, "Old Version", change.before, change.beforeContext, change.inline, "removed", null, change.ownerReviews);
+    appendReviewNoteColumn(pair, change, decision);
     card.append(pair);
-    appendOwnerReviews(card, change.ownerReviews);
     appendRevisionFeedback(card, decision.feedbackNotes);
     const actions = node("div", "revision-actions");
     appendDecisionActions(actions, change, decision);
@@ -454,15 +458,17 @@
       headerMeta.append(node("span", "revision-kind-badge", "No text change"));
       header.append(headerMeta);
       card.append(header);
-      appendDecisionStatus(card, decision);
       card.append(node("p", "revision-alert", "Review item produced no detectable text change"));
+      const pair = node("div", "revision-pair");
       if (item.after || item.before) {
-        const pair = node("div", "revision-pair");
         appendSide(pair, "New Version", item.after, null, null, null, item.after?.id || null, null);
         appendSide(pair, "Old Version", item.before || item.after, null, null, null, null, item.annotation ? [item.annotation] : []);
-        card.append(pair);
+      } else {
+        appendSide(pair, "New Version", null, null, null, null, null, null);
+        appendSide(pair, "Old Version", null, null, null, null, null, null);
       }
-      appendOwnerReviews(card, item.annotation ? [item.annotation] : []);
+      appendReviewNoteColumn(pair, changeLike, decision);
+      card.append(pair);
       appendRevisionFeedback(card, decision.feedbackNotes);
       const actions = node("div", "revision-actions");
       appendDecisionActions(actions, changeLike, decision);

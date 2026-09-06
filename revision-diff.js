@@ -285,26 +285,47 @@
     return false;
   }
 
-  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore = new Set(), stableAfter = new Set()) {
-    const cluster = [...seedChanges];
-    const clusterIds = new Set(cluster.map((change) => change.id));
+  function isStructuralRewriteHunk(change) {
+    return change?.kind === "inserted" || change?.kind === "removed";
+  }
+
+  function collectUnstableIsland(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore, stableAfter) {
+    const island = [...seedChanges];
+    const islandIds = new Set(island.map((change) => change.id));
     let grew = true;
     while (grew) {
       grew = false;
-      const bounds = clusterBounds(cluster);
+      const bounds = clusterBounds(island);
       if (spanTooLarge(bounds)) break;
       for (const change of allChanges) {
-        if (clusterIds.has(change.id) || claimed.has(change.id)) continue;
+        if (islandIds.has(change.id) || claimed.has(change.id)) continue;
         if (foreignSeedIds.has(change.id)) continue;
         if (!changeTouchesBounds(change, bounds, 1)) continue;
         if (!changeReachableWithoutStableGap(change, bounds, stableBefore, stableAfter)) continue;
-        const next = [...cluster, change];
+        const next = [...island, change];
         if (spanTooLarge(clusterBounds(next))) continue;
-        cluster.push(change);
-        clusterIds.add(change.id);
+        island.push(change);
+        islandIds.add(change.id);
         grew = true;
       }
     }
+    return island;
+  }
+
+  function regionContestedByForeignSeeds(seedChanges, allChanges, foreignSeedIds, stableBefore, stableAfter) {
+    if (!foreignSeedIds.size) return false;
+    const probe = collectUnstableIsland(seedChanges, allChanges, new Set(), new Set(), stableBefore, stableAfter);
+    return probe.some((change) => foreignSeedIds.has(change.id));
+  }
+
+  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore = new Set(), stableAfter = new Set()) {
+    if (!seedChanges.length) return [];
+    const contested = regionContestedByForeignSeeds(seedChanges, allChanges, foreignSeedIds, stableBefore, stableAfter);
+    const island = collectUnstableIsland(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore, stableAfter);
+    const structural = island.some(isStructuralRewriteHunk) || seedChanges.some(isStructuralRewriteHunk);
+    // Sole structural rewrite islands stay Owner-linked. Contested regions and
+    // in-place neighbor polish stay on their direct seeds only.
+    const cluster = structural && !contested ? island : [...seedChanges];
     return cluster.sort((left, right) => left.displayIndex - right.displayIndex || (left.before?.index ?? -1) - (right.before?.index ?? -1));
   }
 

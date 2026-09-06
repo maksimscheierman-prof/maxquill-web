@@ -235,11 +235,14 @@ test("grouped rewrite keeps full old and new paragraphs for review", () => {
   assert.equal(ranges.length, 1);
   assert.equal(model.changes[0].before.text.slice(ranges[0].start, ranges[0].end), "shared sleep chamber");
   const layout = revision.revisionComparisonLayout();
-  assert.deepEqual(layout.desktopColumns, ["new", "old"]);
+  assert.deepEqual(layout.desktopColumns, ["new", "old", "ownerNote"]);
+  assert.deepEqual(layout.desktopFractions, [0.4, 0.4, 0.2]);
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
   assert.equal(layout.labels.new, "New Version");
   assert.equal(layout.labels.old, "Old Version");
   assert.equal(layout.labels.ownerNote, "Owner Review Note");
+  assert.equal(layout.labels.additional, "Additional Revision Change");
+  assert.match(layout.additionalNote, /No Owner Review Note/);
 });
 
 test("CH001 wording and continuity notes remain independent Accept units", () => {
@@ -311,8 +314,12 @@ test("CH001 wording and continuity notes remain independent Accept units", () =>
   assert.equal(acceptedDecision.state, "accepted");
   assert.equal(acceptedDecision.showUndoAccept, true);
   assert.deepEqual(acceptedDecision.actions, ["accepted", "undo_accept"]);
-  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-wording", "owner:ann-lyra"] }, []), true);
-  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, feedback), true);
+  const allAcceptIds = revision.acceptAllEligibleIds(model, []);
+  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: allAcceptIds }, []), true);
+  assert.ok(allAcceptIds.includes("owner:ann-wording"));
+  assert.ok(allAcceptIds.includes("owner:ann-lyra"));
+  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, feedback), false);
+  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra", ...allAcceptIds.filter((id) => id !== "owner:ann-wording")] }, feedback), true);
   assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, []), false);
   const next = revision.buildNextRevisionAnnotations(feedback);
   assert.equal(next.length, 1);
@@ -521,6 +528,44 @@ test("CH001 Lyra continuity note groups multiple adjacent hunks into one card", 
   assert.ok(additionalCards.every((change) => !change.ownerReviews.some((note) => note.id === "ann-lyra")));
   assert.equal(revision.changeCardCount(model), model.changes.length + model.unmatchedReviewItems.length);
   assert.ok(revision.changeCardCount(model) < rawHunks.length + 1);
+});
+
+test("adjacent unowned polish is not attributed to a nearby Owner note", () => {
+  const before = pkg(1, [
+    paragraph("p001", "Owner target: Lyra shared the room."),
+    paragraph("p002", "Neighbor line needing polish."),
+    paragraph("p003", "Stable close.")
+  ]);
+  const after = pkg(2, [
+    paragraph("p001", "The door opened. Lyra entered from the hall."),
+    paragraph("p002", "Neighbor line polished independently."),
+    paragraph("p003", "Stable close.")
+  ]);
+  const ownerReview = {
+    annotations: [note("ann-1", "p001", "Lyra shared the room", "Have her enter instead.", "continuity")]
+  };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  const ownerCards = model.changes.filter((change) => change.origin === "owner_requested");
+  const additionalCards = model.changes.filter((change) => change.origin === "additional_revision");
+  assert.equal(ownerCards.length, 1);
+  assert.equal(ownerCards[0].id, "owner:ann-1");
+  assert.equal(ownerCards[0].ownerReviews.length, 1);
+  assert.deepEqual(ownerCards[0].memberIds, ["changed:p001:p001:0:0"]);
+  assert.match(ownerCards[0].after.text, /The door opened/);
+  assert.equal(additionalCards.length, 1);
+  assert.equal(additionalCards[0].ownerReviews.length, 0);
+  assert.deepEqual(additionalCards[0].memberIds, ["changed:p002:p002:1:1"]);
+  assert.match(additionalCards[0].after.text, /polished independently/);
+  assert.equal(additionalCards[0].origin, "additional_revision");
+  assert.ok(!ownerCards[0].memberIds.some((id) => id.includes("p002")));
+});
+
+test("owner-linked revision cards expose three-column comparison layout metadata", () => {
+  const layout = revision.revisionComparisonLayout();
+  assert.deepEqual(layout.desktopColumns, ["new", "old", "ownerNote"]);
+  assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
+  assert.equal(layout.desktopColumns.length, 3);
+  assert.ok(layout.desktopFractions[0] + layout.desktopFractions[1] + layout.desktopFractions[2] === 1);
 });
 
 test("distant unrelated changes are not absorbed into an owner review card", () => {

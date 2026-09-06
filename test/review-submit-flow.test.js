@@ -90,6 +90,12 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /"Old Version"/);
   assert.match(script, /"Owner Review Note"/);
   assert.match(script, /origin === "owner_requested" \? "Revision"/);
+  assert.match(script, /appendReviewNoteColumn/);
+  assert.match(script, /revision-side-note/);
+  assert.match(script, /layout\.additionalNote|additionalNote/);
+  assert.match(script, /labels\.additional|Additional Revision Change/);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /No Owner Review Note — this change was made independently by the reviser\./);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Additional Revision Change/);
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
   assert.match(script, /revision-prose/);
@@ -104,9 +110,12 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.doesNotMatch(script, /revision-passage-block/);
   assert.doesNotMatch(script, /revision-owner-anchor/);
   assert.doesNotMatch(script, /Change \$\{index \+ 1\} ·/);
-  assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:1fr 1fr/);
+  assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:2fr 2fr 1fr/);
   assert.match(css, /@media\(max-width:48rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
-  assert.match(css, /\.revision-owner-note\{/);
+  assert.match(css, /\.revision-side-note\{/);
+  assert.match(css, /\.revision-side-new\{order:1\}/);
+  assert.match(css, /\.revision-side-old\{order:2\}/);
+  assert.match(css, /\.revision-side-note\{order:3/);
   assert.match(css, /\.revision-prose\{/);
   assert.match(css, /\.revision-prose-p\{[^}]*border:\s*0/);
   assert.match(css, /--revision-new:/);
@@ -140,9 +149,11 @@ test("revision continuous prose uses green/orange/red without underlines or para
   assert.match(script, /changesReviewResolved/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Needs revision/);
 });
-test("revision comparison layout prefers New left / Old right with stacked mobile order", () => {
+test("revision comparison layout prefers New / Old / Review Note with stacked mobile order", () => {
   const layout = require("../revision-review.js").revisionComparisonLayout();
-  assert.deepEqual(layout.desktopColumns, ["new", "old"]);
+  assert.deepEqual(layout.desktopColumns, ["new", "old", "ownerNote"]);
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
+  assert.deepEqual(layout.desktopFractions, [0.4, 0.4, 0.2]);
   assert.equal(layout.kindBadgeSecondary, true);
+  assert.match(layout.additionalNote, /independently by the reviser/);
 });

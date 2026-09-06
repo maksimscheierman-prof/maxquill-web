@@ -432,9 +432,16 @@
 
   function revisionComparisonLayout() {
     return {
-      desktopColumns: ["new", "old"],
+      desktopColumns: ["new", "old", "ownerNote"],
+      desktopFractions: [0.4, 0.4, 0.2],
       mobileStack: ["new", "old", "ownerNote"],
-      labels: { new: "New Version", old: "Old Version", ownerNote: "Owner Review Note" },
+      labels: {
+        new: "New Version",
+        old: "Old Version",
+        ownerNote: "Owner Review Note",
+        additional: "Additional Revision Change"
+      },
+      additionalNote: "No Owner Review Note — this change was made independently by the reviser.",
       kindBadgeSecondary: true
     };
   }
