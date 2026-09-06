@@ -96,8 +96,9 @@
       if (keep && token.type !== "equal" && token.type !== keep) continue;
       if (token.type === "equal") target.append(document.createTextNode(token.text));
       else {
-        const mark = node("span", token.type === "inserted" ? "revision-text revision-text-changed" : "revision-text revision-text-removed", token.text);
-        mark.setAttribute("data-diff", token.type === "inserted" ? "inserted" : "removed");
+        const semantic = token.type === "inserted" ? "revision-text revision-new" : "revision-text revision-changed";
+        const mark = node("span", semantic, token.text);
+        mark.setAttribute("data-diff", token.type === "inserted" ? "inserted" : "changed");
         target.append(mark);
       }
     }
@@ -105,30 +106,11 @@
   }
   function kindLabel(kind) { return { changed: "Changed", removed: "Removed", inserted: "Inserted", moved: "Moved", unchanged: "Unchanged", title: "Chapter title", title_unchanged: "Chapter title" }[kind] || kind; }
   function originLabel(origin) { return origin === "owner_requested" ? "Owner-requested change" : "Additional revision change"; }
-  function appendMarkedText(target, text, ranges, className, baseClassName) {
-    let cursor = 0;
-    for (const range of ranges) {
-      if (range.start > cursor) {
-        if (baseClassName) {
-          const base = node("span", baseClassName, text.slice(cursor, range.start));
-          target.append(base);
-        } else target.append(document.createTextNode(text.slice(cursor, range.start)));
-      }
-      const mark = node("span", className, text.slice(range.start, range.end));
-      mark.setAttribute("data-diff", "owner-selection");
-      target.append(mark);
-      cursor = range.end;
-    }
-    if (cursor < text.length) {
-      if (baseClassName) target.append(node("span", baseClassName, text.slice(cursor)));
-      else target.append(document.createTextNode(text.slice(cursor)));
-    }
-  }
   function proseRoleClass(role, side) {
     if (role === "context") return "revision-prose-context";
-    if (side === "old" && role === "removed") return "revision-text revision-text-removed";
-    if (role === "inserted" || role === "changed") return "revision-text revision-text-changed";
-    return "revision-text revision-text-changed";
+    if (side === "new") return "revision-text revision-new";
+    if (role === "removed") return "revision-text revision-removed";
+    return "revision-text revision-changed";
   }
   function appendPassageBlock(side, passages, label, ownerReviews, inlineTokens) {
     if (!passages?.length) {
@@ -139,9 +121,6 @@
     block.setAttribute("role", "group");
     block.setAttribute("aria-label", label);
     const isNew = label === "New Version";
-    const joined = passages.map((passage) => passage.text).join("\n\n");
-    const ownerRanges = !isNew ? MaxQuillRevisionReview.ownerSelectedRanges(joined, ownerReviews) : [];
-    let cursor = 0;
     for (const passage of passages) {
       const body = node("p", `revision-prose-p${passage.changed ? "" : " is-context"}`);
       body.setAttribute("data-passage-role", passage.role || (passage.changed ? "changed" : "unchanged"));
@@ -149,17 +128,9 @@
         body.id = `paragraph-${passage.id}`;
         body.dataset.paragraphId = passage.id;
       }
-      const start = joined.indexOf(passage.text, cursor);
-      const end = start >= 0 ? start + passage.text.length : -1;
-      if (start >= 0) cursor = end;
-      const localOwner = ownerRanges
-        .filter((range) => start >= 0 && range.end > start && range.start < end)
-        .map((range) => ({ start: Math.max(0, range.start - start), end: Math.min(passage.text.length, range.end - start) }));
       const roleClass = proseRoleClass(passage.role || (passage.changed ? (isNew ? "inserted" : "changed") : "context"), isNew ? "new" : "old");
-      if (passages.length === 1 && inlineTokens?.length && !localOwner.length) {
+      if (passages.length === 1 && inlineTokens?.length) {
         renderPassage(body, passage.text, inlineTokens, isNew ? "inserted" : "removed");
-      } else if (localOwner.length) {
-        appendMarkedText(body, passage.text, localOwner, `revision-owner-anchor${passage.changed ? ` ${roleClass}` : ""}`, passage.changed ? roleClass : null);
       } else if (passage.changed) {
         const mark = node("span", roleClass, passage.text);
         mark.setAttribute("data-diff", passage.role === "removed" ? "removed" : passage.role === "inserted" ? "inserted" : "changed");
@@ -262,9 +233,11 @@
     summary.textContent = `${model.summary.total} ${model.summary.total === 1 ? "change" : "changes"} · ${model.summary.ownerRequested} owner-requested · ${model.summary.additional} additional${model.summary.unmatched ? ` · ${model.summary.unmatched} with no detectable text change` : ""}`;
     toolbar.append(summary);
     const legend = node("p", "revision-legend");
-    const changedKey = node("span", "revision-legend-changed", "Orange — Changed");
-    const removedKey = node("span", "revision-legend-removed", "Red — Removed");
-    legend.append(changedKey, removedKey);
+    legend.append(
+      node("span", "revision-legend-new", "Green — New / Revised"),
+      node("span", "revision-legend-changed", "Orange — Changed from old version"),
+      node("span", "revision-legend-removed", "Red — Removed")
+    );
     toolbar.append(legend);
     if (model.changes.length || model.titleChange) {
       const acceptAll = node("button", "", "Accept All"); acceptAll.type = "button"; acceptAll.addEventListener("click", acceptAllChanges); toolbar.append(acceptAll);

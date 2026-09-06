@@ -93,26 +93,37 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
   assert.match(script, /revision-prose/);
-  assert.match(script, /revision-text-changed/);
-  assert.match(script, /revision-text-removed/);
-  assert.match(script, /revision-owner-anchor/);
+  assert.match(script, /revision-new/);
+  assert.match(script, /revision-changed/);
+  assert.match(script, /revision-removed/);
   assert.match(script, /revision-kind-badge/);
   assert.match(script, /revision-legend/);
+  assert.match(script, /Green — New \/ Revised/);
+  assert.match(script, /Orange — Changed from old version/);
+  assert.match(script, /Red — Removed/);
   assert.doesNotMatch(script, /revision-passage-block/);
+  assert.doesNotMatch(script, /revision-owner-anchor/);
   assert.doesNotMatch(script, /Change \$\{index \+ 1\} ·/);
   assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:1fr 1fr/);
   assert.match(css, /@media\(max-width:48rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
   assert.match(css, /\.revision-owner-note\{/);
-  assert.match(css, /\.revision-owner-anchor\{/);
   assert.match(css, /\.revision-prose\{/);
   assert.match(css, /\.revision-prose-p\{[^}]*border:\s*0/);
-  assert.match(css, /\.revision-text-changed\{[^}]*color:var\(--revision-changed\)/);
-  assert.match(css, /\.revision-text-removed\{[^}]*color:var\(--revision-removed\)/);
+  assert.match(css, /--revision-new:/);
+  assert.match(css, /--revision-changed:/);
+  assert.match(css, /--revision-removed:/);
+  assert.match(css, /\.revision-new\{color:var\(--revision-new\)\}/);
+  assert.match(css, /\.revision-changed\{color:var\(--revision-changed\)\}/);
+  assert.match(css, /\.revision-removed\{color:var\(--revision-removed\)\}/);
+  assert.doesNotMatch(css, /\.revision-new\{[^}]*text-decoration:underline/);
+  assert.doesNotMatch(css, /\.revision-changed\{[^}]*text-decoration:underline/);
+  assert.doesNotMatch(css, /\.revision-removed\{[^}]*text-decoration:underline/);
   assert.doesNotMatch(css, /\.revision-passage\{[^}]*border:1px solid/);
   assert.doesNotMatch(css, /\.revision-passage-block\{/);
+  assert.doesNotMatch(css, /\.revision-owner-anchor\{/);
 });
 
-test("revision continuous prose uses accent for changed and red for removed without paragraph tiles", () => {
+test("revision continuous prose uses green/orange/red without underlines or paragraph tiles", () => {
   const css = fs.readFileSync(require.resolve("../styles.css"), "utf8");
   const script = fs.readFileSync(require.resolve("../reader.js"), "utf8");
   assert.match(css, /\.revision-prose-p\{margin:0 0 1\.15em;padding:0;border:0;background:transparent/);
@@ -120,7 +131,11 @@ test("revision continuous prose uses accent for changed and red for removed with
   assert.match(script, /data-passage-role/);
   assert.match(script, /data-diff/);
   assert.match(script, /revision-prose/);
+  assert.match(script, /proseRoleClass\([\s\S]*revision-new/);
+  assert.match(script, /proseRoleClass\([\s\S]*revision-changed/);
+  assert.match(script, /proseRoleClass\([\s\S]*revision-removed/);
   assert.doesNotMatch(script, /revision-passage\$\{/);
+  assert.doesNotMatch(css, /text-decoration:underline/);
 });
 test("revision comparison layout prefers New left / Old right with stacked mobile order", () => {
   const layout = require("../revision-review.js").revisionComparisonLayout();
