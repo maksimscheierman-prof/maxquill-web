@@ -240,8 +240,9 @@ test("grouped rewrite keeps full old and new paragraphs for review", () => {
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
   assert.equal(layout.labels.new, "New Version");
   assert.equal(layout.labels.old, "Old Version");
-  assert.equal(layout.labels.ownerNote, "Owner Review Note");
+  assert.equal(layout.labels.ownerNote, "Original Owner Review Note");
   assert.equal(layout.labels.additional, "Additional Revision Change");
+  assert.equal(layout.labels.revisionFeedback, "Revision Review Feedback");
   assert.match(layout.additionalNote, /No Owner Review Note/);
 });
 

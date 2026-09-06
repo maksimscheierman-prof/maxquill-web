@@ -318,14 +318,61 @@
     return probe.some((change) => foreignSeedIds.has(change.id));
   }
 
-  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore = new Set(), stableAfter = new Set()) {
+  function commentEvidenceLinks(note, change) {
+    const comment = normalizeText(note?.comment || "");
+    if (comment.length < 16) return false;
+    const texts = [change?.after?.text, change?.before?.text].filter(Boolean).map((text) => normalizeText(text));
+    for (const text of texts) {
+      if (!text) continue;
+      const probe = text.slice(0, Math.min(72, text.length));
+      if (probe.length >= 20 && comment.includes(probe)) return true;
+      const window = Math.min(36, Math.max(18, Math.floor(text.length / 3)));
+      for (let index = 0; index + window <= text.length; index += Math.max(10, Math.floor(window / 2))) {
+        if (comment.includes(text.slice(index, index + window))) return true;
+      }
+    }
+    return false;
+  }
+
+  function changeReachableInUnstableRegion(change, bounds, stableBefore, stableAfter) {
+    const indexes = changeIndexes(change);
+    if (indexes.before == null && indexes.after == null) return false;
+    if (bounds.minBefore == null && bounds.minAfter == null) return true;
+    if (indexes.before != null && bounds.minBefore != null) {
+      if (pathClear(indexes.before < bounds.minBefore ? bounds.minBefore : bounds.maxBefore, indexes.before, stableBefore)) return true;
+    }
+    if (indexes.after != null && bounds.minAfter != null) {
+      if (pathClear(indexes.after < bounds.minAfter ? bounds.minAfter : bounds.maxAfter, indexes.after, stableAfter)) return true;
+    }
+    return false;
+  }
+
+  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore = new Set(), stableAfter = new Set(), annotation = null) {
     if (!seedChanges.length) return [];
     const contested = regionContestedByForeignSeeds(seedChanges, allChanges, foreignSeedIds, stableBefore, stableAfter);
     const island = collectUnstableIsland(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore, stableAfter);
     const structural = island.some(isStructuralRewriteHunk) || seedChanges.some(isStructuralRewriteHunk);
     // Sole structural rewrite islands stay Owner-linked. Contested regions and
-    // in-place neighbor polish stay on their direct seeds only.
-    const cluster = structural && !contested ? island : [...seedChanges];
+    // in-place neighbor polish stay on their direct seeds unless the Owner comment
+    // itself cites the change text (reliable evidence, not mere proximity).
+    let cluster = structural && !contested ? [...island] : [...seedChanges];
+    const clusterIds = new Set(cluster.map((change) => change.id));
+    if (annotation) {
+      let grew = true;
+      while (grew) {
+        grew = false;
+        const bounds = clusterBounds(cluster);
+        for (const change of allChanges) {
+          if (clusterIds.has(change.id) || claimed.has(change.id) || foreignSeedIds.has(change.id)) continue;
+          if (!commentEvidenceLinks(annotation, change)) continue;
+          if (!changeReachableInUnstableRegion(change, bounds, stableBefore, stableAfter)) continue;
+          if (spanTooLarge(clusterBounds([...cluster, change]))) continue;
+          cluster.push(change);
+          clusterIds.add(change.id);
+          grew = true;
+        }
+      }
+    }
     return cluster.sort((left, right) => left.displayIndex - right.displayIndex || (left.before?.index ?? -1) - (right.before?.index ?? -1));
   }
 
@@ -516,7 +563,7 @@
         continue;
       }
       const foreignSeedIds = new Set([...allSeededChangeIds].filter((changeId) => !seeds.some((seed) => seed.id === changeId)));
-      const cluster = expandOwnerCluster(seeds, changes, claimed, foreignSeedIds, exactBeforeIndexes, exactAfterIndexes);
+      const cluster = expandOwnerCluster(seeds, changes, claimed, foreignSeedIds, exactBeforeIndexes, exactAfterIndexes, annotation);
       for (const change of cluster) claimed.add(change.id);
       ownerCards.push(makeGroupedChange({
         id: `owner:${annotation.id}`,

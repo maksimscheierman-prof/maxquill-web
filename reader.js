@@ -122,6 +122,41 @@
     if (role === "removed") return "revision-text revision-removed";
     return "revision-text revision-changed";
   }
+  function appendTextWithOwnerUnderline(target, text, roleClass, dataDiff, ownerReviews, passage) {
+    const ranges = (!roleClass?.includes("revision-new") && ownerReviews?.length)
+      ? MaxQuillRevisionReview.ownerSelectedRangesForPassage(passage || { text }, ownerReviews)
+      : [];
+    if (!ranges.length) {
+      if (roleClass) {
+        const mark = node("span", roleClass, text || "");
+        if (dataDiff) mark.setAttribute("data-diff", dataDiff);
+        target.append(mark);
+      } else target.append(document.createTextNode(text || ""));
+      return;
+    }
+    let cursor = 0;
+    for (const range of ranges) {
+      if (range.start > cursor) {
+        if (roleClass) {
+          const before = node("span", roleClass, text.slice(cursor, range.start));
+          if (dataDiff) before.setAttribute("data-diff", dataDiff);
+          target.append(before);
+        } else target.append(document.createTextNode(text.slice(cursor, range.start)));
+      }
+      const selected = node("span", `${roleClass || ""} revision-owner-selection`.trim(), text.slice(range.start, range.end));
+      if (dataDiff) selected.setAttribute("data-diff", dataDiff);
+      selected.setAttribute("data-owner-selection", "true");
+      target.append(selected);
+      cursor = range.end;
+    }
+    if (cursor < text.length) {
+      if (roleClass) {
+        const after = node("span", roleClass, text.slice(cursor));
+        if (dataDiff) after.setAttribute("data-diff", dataDiff);
+        target.append(after);
+      } else target.append(document.createTextNode(text.slice(cursor)));
+    }
+  }
   function appendPassageBlock(side, passages, label, ownerReviews, inlineTokens) {
     if (!passages?.length) {
       side.append(node("p", "revision-empty", "[none]"));
@@ -139,12 +174,17 @@
         body.dataset.paragraphId = passage.id;
       }
       const roleClass = proseRoleClass(passage.role || (passage.changed ? (isNew ? "inserted" : "changed") : "context"), isNew ? "new" : "old");
-      if (passages.length === 1 && inlineTokens?.length) {
+      if (passages.length === 1 && inlineTokens?.length && (isNew || !ownerReviews?.length)) {
         renderPassage(body, passage.text, inlineTokens, isNew ? "inserted" : "removed");
       } else if (passage.changed) {
-        const mark = node("span", roleClass, passage.text);
-        mark.setAttribute("data-diff", passage.role === "removed" ? "removed" : passage.role === "inserted" ? "inserted" : "changed");
-        body.append(mark);
+        const dataDiff = passage.role === "removed" ? "removed" : passage.role === "inserted" ? "inserted" : "changed";
+        if (isNew) {
+          const mark = node("span", roleClass, passage.text);
+          mark.setAttribute("data-diff", dataDiff);
+          body.append(mark);
+        } else appendTextWithOwnerUnderline(body, passage.text, roleClass, dataDiff, ownerReviews, passage);
+      } else if (!isNew && ownerReviews?.length) {
+        appendTextWithOwnerUnderline(body, passage.text, null, null, ownerReviews, passage);
       } else body.textContent = passage.text;
       block.append(body);
     }
@@ -168,49 +208,59 @@
   function appendReviewNoteColumn(parent, change, decision) {
     const layout = MaxQuillRevisionReview.revisionComparisonLayout();
     const reviews = change.ownerReviews || (change.annotation ? [change.annotation] : []);
-    const hasOwnerNote = Boolean(reviews.length) || change.origin === "owner_requested";
+    const hasOwnerNote = Boolean(reviews.length);
     const side = node("div", `revision-side revision-side-note${hasOwnerNote ? "" : " is-additional"}`);
     side.dataset.column = "ownerNote";
     side.append(node("span", "revision-side-label", hasOwnerNote ? layout.labels.ownerNote : layout.labels.additional));
-    if (decision?.state && decision.state !== "unresolved") {
-      side.append(node("p", `revision-note-decision${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.state === "flagged" ? "Flagged" : decision.state === "needs_revision" ? "Needs revision" : "Accepted"));
-    }
     if (!hasOwnerNote) {
       side.append(node("p", "revision-additional-note", layout.additionalNote));
+      if (decision?.feedbackNotes?.length) appendRevisionFeedbackInto(side, decision.feedbackNotes, layout);
       parent.append(side);
       return;
     }
     for (const note of reviews) {
       const block = node("div", "revision-review");
-      block.append(node("p", "revision-note-category", note.category || "other"));
+      block.append(node("p", "revision-note-category", MaxQuillRevisionReview.ownerAnnotationBadge(note)));
       if (note.selectedText) {
+        const selectedLabel = node("p", "revision-note-field-label", "Selected");
+        block.append(selectedLabel);
         const quote = document.createElement("q");
         quote.className = "revision-note-quote";
         quote.textContent = note.selectedText;
         block.append(quote);
       }
+      const commentLabel = node("p", "revision-note-field-label", MaxQuillRevisionReview.ownerAnnotationKind(note) === "flag" ? "Flag" : "Comment");
+      block.append(commentLabel);
       const comment = document.createElement("blockquote");
       comment.className = "revision-note-comment";
       comment.textContent = note.comment;
       block.append(comment);
       side.append(block);
     }
+    if (decision?.feedbackNotes?.length) appendRevisionFeedbackInto(side, decision.feedbackNotes, layout);
+    else if (decision?.state && decision.state !== "unresolved") {
+      side.append(node("p", `revision-note-decision${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.state === "flagged" ? "Flagged" : decision.state === "needs_revision" ? "Needs revision" : "Accepted"));
+    }
     parent.append(side);
   }
-  function appendRevisionFeedback(card, feedbackNotes) {
+  function appendRevisionFeedbackInto(parent, feedbackNotes, layout = MaxQuillRevisionReview.revisionComparisonLayout()) {
     if (!feedbackNotes?.length) return;
-    const section = node("div", "revision-pass-feedback");
-    section.append(node("p", "revision-side-label", "Revision Review Feedback"));
+    const section = node("div", "revision-pass-feedback revision-pass-feedback-inline");
+    section.append(node("p", "revision-side-label", layout.labels.revisionFeedback || "Revision Review Feedback"));
     for (const note of feedbackNotes) {
       const block = node("div", "revision-review revision-feedback");
-      block.append(node("p", "revision-note-category", `${note.revisionFeedbackKind === "flag" ? "Flag" : "Comment"} · ${note.category || "other"}`));
+      const kind = note.revisionFeedbackKind === "flag" ? "FLAG" : "COMMENT";
+      const category = MaxQuillRevisionReview.ownerAnnotationCategoryLabel(note.category).toUpperCase();
+      block.append(node("p", "revision-note-category", `${kind} · ${category}`));
+      const state = note.revisionFeedbackKind === "flag" ? "Flagged" : "Needs revision";
+      block.append(node("p", `revision-note-decision${note.revisionFeedbackKind === "flag" ? " is-flagged" : ""}`, state));
       const comment = document.createElement("blockquote");
       comment.className = "revision-note-comment";
       comment.textContent = note.comment;
       block.append(comment);
       section.append(block);
     }
-    card.append(section);
+    parent.append(section);
   }
   function appendDecisionActions(actions, change, decision) {
     if (decision.showAccept) {
@@ -298,7 +348,6 @@
     appendSide(pair, "Old Version", change.before, change.beforeContext, change.inline, "removed", null, change.ownerReviews);
     appendReviewNoteColumn(pair, change, decision);
     card.append(pair);
-    appendRevisionFeedback(card, decision.feedbackNotes);
     const actions = node("div", "revision-actions");
     appendDecisionActions(actions, change, decision);
     card.append(actions); body.append(card);
@@ -313,7 +362,7 @@
   }
   function commentOnChange(change, category = "wording", preset = "", feedbackKind = "comment") {
     if (change?.kind === "title" || change?.kind === "title_unchanged" || change?.annotation?.target === "chapter_title") {
-      pendingSelection = { target: "chapter_title", selectedText: sourcePackage.title, revisionChangeId: change.id, revisionFeedbackKind: feedbackKind, sourceOwnerNoteId: change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id || null };
+      pendingSelection = { target: "chapter_title", selectedText: sourcePackage.title, revisionChangeId: change.id, revisionFeedbackKind: feedbackKind, annotationKind: feedbackKind === "flag" ? "flag" : "comment", sourceOwnerNoteId: change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id || null };
       openTitleEditor(null, preset);
       return;
     }
@@ -328,6 +377,7 @@
       selectionEnd: paragraph.text.length,
       revisionChangeId: change.id,
       revisionFeedbackKind: feedbackKind,
+      annotationKind: feedbackKind === "flag" ? "flag" : "comment",
       sourceOwnerNoteId: change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id || null
     };
     if (!MaxQuillSelectionLogic.validateSelectionCandidate(sourcePackage, candidate).valid) { showMessage("#selection-message", "This passage cannot be annotated."); return; }
@@ -365,6 +415,7 @@
       requiresCanonChange: false,
       revisionChangeId: change.id,
       revisionFeedbackKind: "flag",
+      annotationKind: "flag",
       sourceOwnerNoteId: change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id || null
     };
     const validation = MaxQuillReviewContract.validateOwnerReviewPackage(buildOwnerReviewPackage([annotation]), sourcePackage);
@@ -469,7 +520,6 @@
       }
       appendReviewNoteColumn(pair, changeLike, decision);
       card.append(pair);
-      appendRevisionFeedback(card, decision.feedbackNotes);
       const actions = node("div", "revision-actions");
       appendDecisionActions(actions, changeLike, decision);
       card.append(actions);
@@ -561,9 +611,13 @@
     const revisionChangeId = selection.revisionChangeId || existing?.revisionChangeId || null;
     let revisionFeedbackKind = selection.revisionFeedbackKind || existing?.revisionFeedbackKind || (revisionChangeId ? "comment" : null);
     const sourceOwnerNoteId = selection.sourceOwnerNoteId || existing?.sourceOwnerNoteId || null;
+    const annotationKind = selection.annotationKind || existing?.annotationKind || (selection.revisionFeedbackKind === "flag" || revisionFeedbackKind === "flag" ? "flag" : (existing || pendingSelection ? "comment" : null));
     const annotation = isTitle
       ? { id: existing?.id || annotationId(), target: "chapter_title", selectedText: sourcePackage.title, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked }
       : { id: existing?.id || annotationId(), paragraphId: selection.paragraphId, selectedText: selection.selectedText, selectionStart: selection.selectionStart, selectionEnd: selection.selectionEnd, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked };
+    if (annotationKind === "flag" || annotationKind === "comment") annotation.annotationKind = annotationKind;
+    else if (/^flagged(\b|\s)/i.test(annotation.comment)) annotation.annotationKind = "flag";
+    else annotation.annotationKind = "comment";
     if (revisionChangeId) {
       annotation.revisionChangeId = revisionChangeId;
       if (!revisionFeedbackKind || revisionFeedbackKind === "comment") {
@@ -584,7 +638,7 @@
   }
   function quickFlag() {
     if (!pendingSelection) return;
-    pendingSelection = { ...pendingSelection, revisionFeedbackKind: "flag" };
+    pendingSelection = { ...pendingSelection, revisionFeedbackKind: "flag", annotationKind: "flag" };
     openEditor(null, "other");
     document.querySelector("#annotation-comment").value = "Flagged for revision.";
   }

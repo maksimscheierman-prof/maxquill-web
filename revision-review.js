@@ -416,18 +416,52 @@
     };
   }
 
-  function ownerSelectedRanges(text, reviews) {
+  function ownerAnnotationKind(note) {
+    if (note?.annotationKind === "flag" || note?.annotationKind === "comment") return note.annotationKind;
+    if (/^flagged(\b|\s)/i.test(String(note?.comment || "").trim())) return "flag";
+    return "comment";
+  }
+
+  function ownerAnnotationCategoryLabel(category) {
+    const key = String(category || "other").toLowerCase();
+    const labels = {
+      wording: "Wording",
+      clarity: "Clarity",
+      pacing: "Pacing",
+      dialogue: "Dialogue",
+      continuity: "Continuity",
+      canon: "Canon",
+      style: "Style",
+      other: "Other"
+    };
+    return labels[key] || labels.other;
+  }
+
+  function ownerAnnotationKindLabel(note) {
+    return ownerAnnotationKind(note) === "flag" ? "FLAG" : "COMMENT";
+  }
+
+  function ownerAnnotationBadge(note) {
+    return `${ownerAnnotationKindLabel(note)} · ${ownerAnnotationCategoryLabel(note?.category).toUpperCase()}`;
+  }
+
+  function ownerSelectedRangesForPassage(passage, reviews) {
+    if (!passage?.text) return [];
     const ranges = [];
     for (const note of reviews || []) {
-      if (!note?.selectedText || !text) continue;
-      if (Number.isInteger(note.selectionStart) && Number.isInteger(note.selectionEnd) && note.selectionEnd > note.selectionStart && text.slice(note.selectionStart, note.selectionEnd) === note.selectedText) {
+      if (!note?.selectedText) continue;
+      if (note.paragraphId && passage.id && note.paragraphId === passage.id && Number.isInteger(note.selectionStart) && Number.isInteger(note.selectionEnd) && note.selectionEnd > note.selectionStart && passage.text.slice(note.selectionStart, note.selectionEnd) === note.selectedText) {
         ranges.push({ start: note.selectionStart, end: note.selectionEnd });
         continue;
       }
-      const index = text.indexOf(note.selectedText);
+      const index = passage.text.indexOf(note.selectedText);
       if (index >= 0) ranges.push({ start: index, end: index + note.selectedText.length });
     }
     return ranges.sort((left, right) => left.start - right.start).filter((range, index, all) => !all[index - 1] || range.start >= all[index - 1].end);
+  }
+
+  function ownerSelectedRanges(text, reviews) {
+    return ownerSelectedRangesForPassage({ text, id: null }, reviews);
   }
 
   function revisionComparisonLayout() {
@@ -438,8 +472,9 @@
       labels: {
         new: "New Version",
         old: "Old Version",
-        ownerNote: "Owner Review Note",
-        additional: "Additional Revision Change"
+        ownerNote: "Original Owner Review Note",
+        additional: "Additional Revision Change",
+        revisionFeedback: "Revision Review Feedback"
       },
       additionalNote: "No Owner Review Note — this change was made independently by the reviser.",
       kindBadgeSecondary: true
@@ -479,7 +514,12 @@
     buildNextRevisionAnnotations,
     revisionViewState,
     ownerReviewFromLocal,
+    ownerAnnotationKind,
+    ownerAnnotationCategoryLabel,
+    ownerAnnotationKindLabel,
+    ownerAnnotationBadge,
     ownerSelectedRanges,
+    ownerSelectedRangesForPassage,
     revisionComparisonLayout
   };
 });

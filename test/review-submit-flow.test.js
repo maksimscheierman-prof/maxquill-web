@@ -88,14 +88,16 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(css, /\.chapter-title-review\{/);
   assert.match(script, /"New Version"/);
   assert.match(script, /"Old Version"/);
-  assert.match(script, /"Owner Review Note"/);
+  assert.match(script, /labels\.ownerNote|appendReviewNoteColumn/);
   assert.match(script, /origin === "owner_requested" \? "Revision"/);
   assert.match(script, /appendReviewNoteColumn/);
   assert.match(script, /revision-side-note/);
+  assert.match(script, /ownerAnnotationBadge|revision-owner-selection/);
   assert.match(script, /layout\.additionalNote|additionalNote/);
   assert.match(script, /labels\.additional|Additional Revision Change/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /No Owner Review Note — this change was made independently by the reviser\./);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Additional Revision Change/);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Original Owner Review Note/);
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
   assert.match(script, /revision-prose/);
@@ -127,6 +129,7 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.doesNotMatch(css, /\.revision-new\{[^}]*text-decoration:underline/);
   assert.doesNotMatch(css, /\.revision-changed\{[^}]*text-decoration:underline/);
   assert.doesNotMatch(css, /\.revision-removed\{[^}]*text-decoration:underline/);
+  assert.match(css, /\.revision-owner-selection\{[^}]*text-decoration:underline/);
   assert.doesNotMatch(css, /\.revision-passage\{[^}]*border:1px solid/);
   assert.doesNotMatch(css, /\.revision-passage-block\{/);
   assert.doesNotMatch(css, /\.revision-owner-anchor\{/);
