@@ -74,7 +74,7 @@
   }
 
   function defaultSession(sourceFingerprint, resultFingerprint) {
-    return { sourceFingerprint, resultFingerprint, viewMode: "changes", acceptedChangeIds: [] };
+    return { sourceFingerprint, resultFingerprint, viewMode: "changes", acceptedChangeIds: [], inspectSubmitted: false };
   }
 
   function normalizeSession(value, sourceIdentity, resultIdentity) {
@@ -87,13 +87,18 @@
       sourceFingerprint: sourceIdentity.packageFingerprint,
       resultFingerprint: resultIdentity.packageFingerprint,
       viewMode: VIEW_MODES.has(value.viewMode) ? value.viewMode : "changes",
-      acceptedChangeIds: accepted
+      acceptedChangeIds: accepted,
+      inspectSubmitted: Boolean(value.inspectSubmitted)
     };
   }
 
   function setViewMode(session, viewMode) {
     const mode = VIEW_MODES.has(viewMode) ? viewMode : "changes";
     return { ...session, viewMode: mode };
+  }
+
+  function setInspectSubmitted(session, inspectSubmitted) {
+    return { ...session, inspectSubmitted: Boolean(inspectSubmitted) };
   }
 
   function reviewNotesLabel(count) {
@@ -409,33 +414,51 @@
     changeCount = 0,
     currentNoteCount = 0,
     beforeVersion,
-    afterVersion
+    afterVersion,
+    workspaceMode = null,
+    inspectSubmitted = false
   }) {
     const pair = Boolean(hasRevisionPair);
     const mode = pair && VIEW_MODES.has(viewMode) ? viewMode : null;
-    const readyOnSource = jobStatus === "REVISION_READY" && !pair;
+    const locked = ["submitted_waiting", "revision_ready", "revision_failed"].includes(workspaceMode);
+    const chapterVersion = Number.isInteger(afterVersion) ? afterVersion : null;
+    const derivedNext = Number.isInteger(chapterVersion) ? chapterVersion + 1 : null;
     let noteCountLabel = reviewNotesLabel(currentNoteCount);
     if (pair && mode === "notes") noteCountLabel = reviewNotesLabel(originalNoteCount);
     if (pair && mode === "changes") noteCountLabel = changesTabLabel(changeCount);
+    if (locked && !inspectSubmitted) noteCountLabel = "";
+    const showInspectChanges = Boolean(locked && inspectSubmitted && pair);
+    const showReadyCta = jobStatus === "REVISION_READY" && (!pair || locked);
     return {
-      openRevisedHidden: !readyOnSource,
-      openRevisedLabel: "Review Changes",
-      tabsHidden: !pair,
+      workspaceMode: workspaceMode || null,
+      locked,
+      inspectSubmitted: Boolean(inspectSubmitted && locked),
+      openRevisedHidden: !showReadyCta,
+      openRevisedLabel: derivedNext ? `Review Version ${derivedNext}` : "Review New Version",
+      tabsHidden: !pair || locked,
       notesLabel: reviewNotesLabel(originalNoteCount),
       changesLabel: changesTabLabel(changeCount),
-      notesPressed: mode === "notes",
-      changesPressed: mode === "changes",
-      fullPressed: mode === "full",
-      showChanges: mode === "changes",
-      showOriginalNotes: mode === "notes",
-      showFullChapter: mode === "full" || !pair,
-      toggleHidden: !pair,
-      toggleLabel: "View Full Chapter",
-      togglePressed: mode === "full",
-      versionLabel: pair ? versionRelationLabel(beforeVersion, afterVersion) : "",
+      notesPressed: !locked && mode === "notes",
+      changesPressed: !locked && mode === "changes",
+      fullPressed: (!locked && mode === "full") || (locked && !inspectSubmitted && (mode === "full" || !pair)),
+      showChanges: (!locked && mode === "changes") || showInspectChanges,
+      showOriginalNotes: !locked && mode === "notes",
+      showFullChapter: (!locked && (mode === "full" || !pair)) || (locked && !inspectSubmitted && !pair) || (locked && !inspectSubmitted && mode === "full"),
+      showWaitingPanel: locked && !inspectSubmitted,
+      toggleHidden: locked ? false : !pair,
+      toggleLabel: locked ? (inspectSubmitted ? "Back to Status" : "View Chapter") : "View Full Chapter",
+      togglePressed: locked ? !inspectSubmitted : mode === "full",
+      submittedReviewHidden: !locked,
+      submittedReviewLabel: inspectSubmitted ? "Back to Status" : "View Submitted Review",
+      submittedReviewPressed: Boolean(inspectSubmitted),
+      versionLabel: locked
+        ? (pair ? `${versionRelationLabel(beforeVersion, afterVersion)} submitted` : (chapterVersion ? `Version ${chapterVersion} submitted` : "Review submitted"))
+        : (pair ? versionRelationLabel(beforeVersion, afterVersion) : ""),
       modeSwitchLabel: "Review",
       noteCountLabel,
-      countHidden: pair
+      countHidden: pair || locked,
+      readOnlyReview: Boolean(inspectSubmitted && locked),
+      nextVersion: derivedNext
     };
   }
 
@@ -540,6 +563,7 @@
     defaultSession,
     normalizeSession,
     setViewMode,
+    setInspectSubmitted,
     reviewNotesLabel,
     changesTabLabel,
     versionRelationLabel,

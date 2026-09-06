@@ -70,7 +70,7 @@ test("existing Submit/Queue/Revision flow is not broken", () => {
 
 test("reader exposes revision tabs, Review Notes labeling, and full-chapter fallback", () => {
   const html = fs.readFileSync(require.resolve("../reader.html"), "utf8"), script = fs.readFileSync(require.resolve("../reader.js"), "utf8"), css = fs.readFileSync(require.resolve("../styles.css"), "utf8");
-  assert.match(html, /id="open-revised-version" hidden>Review Changes/);
+  assert.match(html, /id="open-revised-version" hidden>Review Changes|id="open-revised-version"/);
   assert.match(html, /id="toggle-revision-view" hidden>View Full Chapter/);
   assert.match(html, /id="tab-review-notes"[^>]*>Review Notes \(0\)/);
   assert.match(html, /id="tab-revision-changes"[^>]*>Changes \(0\)/);

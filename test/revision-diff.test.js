@@ -157,9 +157,9 @@ test("new package does not show old revision diff session", () => {
 });
 
 test("full chapter fallback is the non-changes view", () => {
-  const ready = revision.revisionViewState({ hasRevisionPair: false, viewMode: "changes", jobStatus: "REVISION_READY" });
+  const ready = revision.revisionViewState({ hasRevisionPair: false, viewMode: "changes", jobStatus: "REVISION_READY", afterVersion: 1 });
   assert.equal(ready.openRevisedHidden, false);
-  assert.equal(ready.openRevisedLabel, "Review Changes");
+  assert.equal(ready.openRevisedLabel, "Review Version 2");
   assert.equal(ready.toggleHidden, true);
   assert.equal(ready.tabsHidden, true);
   const reviewing = revision.revisionViewState({ hasRevisionPair: true, viewMode: "changes", jobStatus: null });
@@ -708,10 +708,11 @@ test("REVISION_READY revised package defaults to Changes, not notes or full chap
   assert.equal(view.togglePressed, false);
   assert.equal(view.toggleLabel, "View Full Chapter");
   assert.equal(view.openRevisedHidden, true);
-  const sourcePage = revision.revisionViewState({ hasRevisionPair: false, viewMode: "changes", jobStatus: "REVISION_READY", currentNoteCount: 16 });
+  const sourcePage = revision.revisionViewState({ hasRevisionPair: false, viewMode: "changes", jobStatus: "REVISION_READY", currentNoteCount: 16, afterVersion: 1 });
   assert.equal(sourcePage.showChanges, false);
   assert.equal(sourcePage.tabsHidden, true);
   assert.equal(sourcePage.openRevisedHidden, false);
+  assert.equal(sourcePage.openRevisedLabel, "Review Version 2");
   assert.equal(sourcePage.noteCountLabel, "Review Notes (16)");
 });
 

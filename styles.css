@@ -89,3 +89,21 @@ html[data-revision-view=changes] .reader-nav{width:min(100% - 3rem,96rem)}
 .reader-feedback-actions{margin-top:.65rem}
 .reader-feedback-actions button{min-height:2.5rem;padding:.35rem .7rem;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
 @media(max-width:40rem){.feedback-chapter-item{flex-direction:column;align-items:flex-start}}
+
+/* Submitted / waiting workspace */
+.revision-waiting-panel{display:grid;gap:1rem;width:min(100%,34rem);margin:clamp(3rem,10vw,6rem) auto;padding:clamp(1.5rem,4vw,2.25rem);border:1px solid var(--line);background:rgba(201,169,110,.07);text-align:left}
+.revision-waiting-panel .eyebrow{margin:0;color:var(--accent)}
+.revision-waiting-title{margin:0;font-family:var(--serif);font-size:clamp(2rem,5vw,2.8rem);font-weight:400;line-height:1.1}
+.revision-waiting-summary,.revision-waiting-detail,.revision-waiting-next,.revision-waiting-persist{margin:0;color:var(--reader-muted);font-family:var(--sans);font-size:.92rem;line-height:1.5}
+.revision-waiting-summary{color:var(--reader-text);font-weight:650}
+.revision-waiting-next{color:var(--accent);font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.78rem}
+.revision-waiting-actions{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.35rem}
+.revision-waiting-actions button{min-height:2.85rem;padding:.45rem .85rem;border:1px solid var(--line);background:transparent;color:inherit;cursor:pointer}
+.revision-waiting-actions .open-revision-button{border-color:var(--accent);background:var(--accent);color:var(--reader-bg);font-weight:700}
+.revision-waiting-panel.is-ready{border-color:rgba(201,169,110,.45)}
+.revision-waiting-panel.is-failed{border-color:rgba(217,154,145,.55)}
+.revision-readonly-banner{margin:0;color:var(--accent);font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+html[data-revision-view=waiting] .chapter-article{width:min(100% - 3rem,42rem)}
+html[data-revision-view=waiting] .review-bar{width:min(100% - 3rem,42rem)}
+@media(max-width:48rem){html[data-revision-view=waiting] .chapter-article,html[data-revision-view=waiting] .review-bar{width:min(100% - 2rem,42rem)}.revision-waiting-panel{margin-top:2rem}.revision-waiting-actions{display:grid;grid-template-columns:1fr}.revision-waiting-actions button{width:100%}}
+.review-job-status .is-queued,.review-job-status .is-processing{color:var(--accent)}
