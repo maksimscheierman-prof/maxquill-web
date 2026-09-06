@@ -290,6 +290,27 @@ test("CH001 wording and continuity notes remain independent Accept units", () =>
   assert.deepEqual(cleared.acceptedChangeIds, []);
   assert.equal(revision.cardDecision({ accepted: true, feedbackNotes: feedback }).state, "needs_revision");
   assert.equal(revision.cardDecision({ accepted: true, feedbackNotes: [{ ...feedback[0], revisionFeedbackKind: "flag" }] }).state, "flagged");
+  assert.deepEqual(revision.cardDecision({ accepted: false, feedbackNotes: [] }).actions, ["accept", "comment", "flag"]);
+  const flaggedDecision = revision.cardDecision({ accepted: false, feedbackNotes: [{ ...feedback[0], revisionFeedbackKind: "flag" }] });
+  assert.equal(flaggedDecision.state, "flagged");
+  assert.equal(flaggedDecision.label, "Flagged · Needs revision");
+  assert.equal(flaggedDecision.headerLabel, "FLAGGED");
+  assert.equal(flaggedDecision.showAccept, false);
+  assert.deepEqual(flaggedDecision.actions, ["edit_flag", "remove_flag"]);
+  assert.equal(flaggedDecision.showEditFlag, true);
+  assert.equal(flaggedDecision.showRemoveFlag, true);
+  assert.equal(flaggedDecision.showComment, false);
+  assert.equal(flaggedDecision.showFlag, false);
+  const commentedDecision = revision.cardDecision({ accepted: false, feedbackNotes: feedback });
+  assert.equal(commentedDecision.state, "needs_revision");
+  assert.equal(commentedDecision.label, "Needs revision");
+  assert.equal(commentedDecision.headerLabel, "NEEDS REVISION");
+  assert.equal(commentedDecision.showAccept, false);
+  assert.deepEqual(commentedDecision.actions, ["edit_comment", "remove_comment"]);
+  const acceptedDecision = revision.cardDecision({ accepted: true, feedbackNotes: [] });
+  assert.equal(acceptedDecision.state, "accepted");
+  assert.equal(acceptedDecision.showUndoAccept, true);
+  assert.deepEqual(acceptedDecision.actions, ["accepted", "undo_accept"]);
   assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-wording", "owner:ann-lyra"] }, []), true);
   assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, feedback), true);
   assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, []), false);
@@ -297,6 +318,142 @@ test("CH001 wording and continuity notes remain independent Accept units", () =>
   assert.equal(next.length, 1);
   assert.equal(next[0].id, "v2-1");
   assert.equal(next[0].revisionChangeId, undefined);
+});
+
+test("revision decision UI state restores from persisted V2 feedback storage", () => {
+  const before = pkg(1, [paragraph("p007", "Old line."), paragraph("p008", "Lyra stayed.")]);
+  const after = pkg(2, [paragraph("p007", "New line."), paragraph("p008", "Lyra entered.")]);
+  const ownerReview = {
+    annotations: [
+      note("ann-wording", "p007", "Old line.", "Tighten.", "wording"),
+      note("ann-lyra", "p008", "Lyra stayed.", "Have her enter.", "continuity")
+    ]
+  };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  const storage = [];
+  const unresolved = revision.applyAccepted(model, [], storage);
+  assert.deepEqual(unresolved.changes.find((change) => change.id === "owner:ann-wording").decision.actions, ["accept", "comment", "flag"]);
+  assert.equal(unresolved.changes.find((change) => change.id === "owner:ann-wording").decision.showAccept, true);
+
+  storage.push({
+    id: "v2-flag",
+    paragraphId: "p007",
+    selectedText: "New line.",
+    selectionStart: 0,
+    selectionEnd: 9,
+    category: "other",
+    comment: "Flagged for revision.",
+    status: "open",
+    requiresCanonChange: false,
+    revisionChangeId: "owner:ann-wording",
+    revisionFeedbackKind: "flag",
+    sourceOwnerNoteId: "ann-wording"
+  });
+  const flagged = revision.applyAccepted(model, ["owner:ann-wording"], storage);
+  const flaggedCard = flagged.changes.find((change) => change.id === "owner:ann-wording");
+  assert.equal(flaggedCard.decision.state, "flagged");
+  assert.equal(flaggedCard.decision.showAccept, false);
+  assert.match(flaggedCard.decision.label, /Flagged/);
+  assert.match(flaggedCard.decision.label, /Needs revision/);
+  assert.deepEqual(flaggedCard.decision.actions, ["edit_flag", "remove_flag"]);
+  assert.equal(flaggedCard.revisionFeedback[0].revisionFeedbackKind, "flag");
+  assert.equal(flagged.changes.find((change) => change.id === "owner:ann-lyra").decision.state, "unresolved");
+
+  const reloaded = revision.applyAccepted(model, [], storage);
+  assert.equal(reloaded.changes.find((change) => change.id === "owner:ann-wording").decision.state, "flagged");
+  assert.equal(reloaded.changes.find((change) => change.id === "owner:ann-wording").decision.showAccept, false);
+
+  storage.length = 0;
+  storage.push({
+    id: "v2-comment",
+    paragraphId: "p007",
+    selectedText: "New line.",
+    selectionStart: 0,
+    selectionEnd: 9,
+    category: "wording",
+    comment: "Still rough.",
+    status: "open",
+    requiresCanonChange: false,
+    revisionChangeId: "owner:ann-wording",
+    revisionFeedbackKind: "comment",
+    sourceOwnerNoteId: "ann-wording"
+  });
+  const commented = revision.applyAccepted(model, [], storage);
+  const commentedCard = commented.changes.find((change) => change.id === "owner:ann-wording");
+  assert.equal(commentedCard.decision.state, "needs_revision");
+  assert.equal(commentedCard.decision.showAccept, false);
+  assert.equal(commentedCard.decision.label, "Needs revision");
+  assert.deepEqual(commentedCard.decision.actions, ["edit_comment", "remove_comment"]);
+
+  storage.length = 0;
+  const afterRemove = revision.applyAccepted(model, [], storage);
+  assert.equal(afterRemove.changes.find((change) => change.id === "owner:ann-wording").decision.state, "unresolved");
+  assert.deepEqual(afterRemove.changes.find((change) => change.id === "owner:ann-wording").decision.actions, ["accept", "comment", "flag"]);
+
+  const accepted = revision.applyAccepted(model, ["owner:ann-wording"], []);
+  assert.equal(accepted.changes.find((change) => change.id === "owner:ann-wording").decision.state, "accepted");
+  assert.deepEqual(accepted.changes.find((change) => change.id === "owner:ann-wording").decision.actions, ["accepted", "undo_accept"]);
+
+  const inferredFlag = revision.feedbackForChange([{
+    id: "legacy-flag",
+    paragraphId: "p007",
+    selectedText: "New line.",
+    selectionStart: 0,
+    selectionEnd: 9,
+    category: "other",
+    comment: "Flagged for revision.",
+    status: "open",
+    requiresCanonChange: false,
+    revisionChangeId: "owner:ann-wording",
+    sourceOwnerNoteId: "ann-wording"
+  }], "owner:ann-wording");
+  assert.equal(inferredFlag[0].revisionFeedbackKind, "flag");
+  assert.equal(revision.cardDecision({ accepted: false, feedbackNotes: inferredFlag }).state, "flagged");
+
+  const byOwnerNote = revision.feedbackForChange([{
+    id: "linked-by-owner",
+    paragraphId: "p007",
+    selectedText: "New line.",
+    selectionStart: 0,
+    selectionEnd: 9,
+    category: "other",
+    comment: "Flagged for revision.",
+    status: "open",
+    requiresCanonChange: false,
+    sourceOwnerNoteId: "ann-wording"
+  }], "owner:ann-wording", { sourceOwnerNoteId: "ann-wording" });
+  assert.equal(byOwnerNote.length, 1);
+  assert.equal(revision.decisionActions("flagged").includes("accept"), false);
+  assert.equal(revision.decisionActions("needs_revision").includes("accept"), false);
+});
+
+test("revision decision state stays package-isolated by fingerprint identity", () => {
+  const before = pkg(1, [paragraph("p007", "Old line.")]);
+  const afterA = pkg(2, [paragraph("p007", "New line A.")]);
+  afterA.chapterId = "ch-a";
+  const afterB = { ...pkg(2, [paragraph("p007", "New line B.")]), chapterId: "ch-b", chapterVersion: 2 };
+  const ownerA = { annotations: [note("ann-a", "p007", "Old line.", "Fix A.", "wording")] };
+  const ownerB = { annotations: [note("ann-b", "p007", "Old line.", "Fix B.", "wording")] };
+  const modelA = diff.buildRevisionReviewModel(before, afterA, ownerA);
+  const modelB = diff.buildRevisionReviewModel(before, afterB, ownerB);
+  const feedbackA = [{
+    id: "v2-a",
+    paragraphId: "p007",
+    selectedText: "New line A.",
+    selectionStart: 0,
+    selectionEnd: 11,
+    category: "other",
+    comment: "Flagged for revision.",
+    status: "open",
+    requiresCanonChange: false,
+    revisionChangeId: "owner:ann-a",
+    revisionFeedbackKind: "flag"
+  }];
+  const appliedA = revision.applyAccepted(modelA, [], feedbackA);
+  const appliedB = revision.applyAccepted(modelB, [], feedbackA);
+  assert.equal(appliedA.changes.find((change) => change.id === "owner:ann-a").decision.state, "flagged");
+  assert.equal(appliedB.changes.find((change) => change.id === "owner:ann-b").decision.state, "unresolved");
+  assert.equal(appliedB.changes.every((change) => change.decision.state === "unresolved"), true);
 });
 
 test("CH001 Lyra continuity note groups multiple adjacent hunks into one card", () => {

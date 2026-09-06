@@ -139,18 +139,44 @@
     };
   }
 
+  function ownerNoteIdFromChangeId(changeId) {
+    if (typeof changeId !== "string") return null;
+    if (changeId.startsWith("owner:")) return changeId.slice("owner:".length);
+    return null;
+  }
+
+  function inferRevisionFeedbackKind(note) {
+    if (note?.revisionFeedbackKind === "flag") return "flag";
+    if (/^flagged(\b|\s)/i.test(String(note?.comment || "").trim())) return "flag";
+    if (note?.revisionFeedbackKind === "comment") return "comment";
+    if (note?.revisionChangeId || note?.sourceOwnerNoteId) return "comment";
+    return null;
+  }
+
+  function normalizeRevisionFeedback(note) {
+    if (!note) return null;
+    const kind = inferRevisionFeedbackKind(note);
+    return kind && note.revisionFeedbackKind !== kind ? { ...note, revisionFeedbackKind: kind } : note;
+  }
+
+  function feedbackMetaForChange(change) {
+    return {
+      sourceOwnerNoteId: change?.sourceOwnerNoteId || change?.ownerReviews?.[0]?.id || change?.annotation?.id || ownerNoteIdFromChangeId(change?.id) || null
+    };
+  }
+
   function applyAccepted(model, acceptedChangeIds, revisionAnnotations = []) {
     const accepted = new Set(acceptedChangeIds || []);
     const enrich = (change) => {
       if (!change) return null;
-      const feedback = feedbackForChange(revisionAnnotations, change.id);
+      const feedback = feedbackForChange(revisionAnnotations, change.id, feedbackMetaForChange(change));
       const decision = cardDecision({ accepted: accepted.has(change.id) && !feedback.length, feedbackNotes: feedback });
       return { ...change, accepted: decision.accepted, decision, revisionFeedback: feedback };
     };
     const changes = (model?.changes || []).map((change) => enrich(change));
     const titleChange = enrich(model?.titleChange);
     const unmatchedReviewItems = (model?.unmatchedReviewItems || []).map((item) => {
-      const feedback = feedbackForChange(revisionAnnotations, item.id);
+      const feedback = feedbackForChange(revisionAnnotations, item.id, feedbackMetaForChange(item));
       const decision = cardDecision({ accepted: accepted.has(item.id) && !feedback.length, feedbackNotes: feedback });
       return { ...item, accepted: decision.accepted, decision, revisionFeedback: feedback };
     });
@@ -168,44 +194,85 @@
     };
   }
 
-  function feedbackForChange(annotations, changeId) {
-    return (annotations || []).filter((note) => note?.revisionChangeId === changeId && note.status === "open");
+  function feedbackForChange(annotations, changeId, meta = {}) {
+    const ownerNoteId = meta.sourceOwnerNoteId || ownerNoteIdFromChangeId(changeId);
+    return (annotations || [])
+      .filter((note) => {
+        if (!note || note.status !== "open") return false;
+        if (note.revisionChangeId === changeId) return true;
+        if (ownerNoteId && note.sourceOwnerNoteId === ownerNoteId) return true;
+        return false;
+      })
+      .map(normalizeRevisionFeedback)
+      .filter(Boolean);
   }
 
   function cardDecision({ accepted = false, feedbackNotes = [] } = {}) {
-    const openFeedback = (feedbackNotes || []).filter((note) => note?.status === "open");
+    const openFeedback = (feedbackNotes || []).map(normalizeRevisionFeedback).filter((note) => note?.status === "open");
     if (openFeedback.length) {
       const flagged = openFeedback.some((note) => note.revisionFeedbackKind === "flag");
+      const state = flagged ? "flagged" : "needs_revision";
       return {
-        state: flagged ? "flagged" : "needs_revision",
-        label: flagged ? "Flagged" : "Needs revision",
+        state,
+        label: flagged ? "Flagged · Needs revision" : "Needs revision",
+        headerLabel: flagged ? "FLAGGED" : "NEEDS REVISION",
         accepted: false,
         canAccept: false,
         showAccept: false,
         showUndoAccept: false,
-        feedbackNotes: openFeedback
+        showComment: false,
+        showFlag: false,
+        showEditComment: !flagged,
+        showRemoveComment: !flagged,
+        showEditFlag: flagged,
+        showRemoveFlag: flagged,
+        feedbackNotes: openFeedback,
+        actions: decisionActions(state)
       };
     }
     if (accepted) {
       return {
         state: "accepted",
         label: "Accepted",
+        headerLabel: "ACCEPTED",
         accepted: true,
         canAccept: true,
         showAccept: false,
         showUndoAccept: true,
-        feedbackNotes: []
+        showComment: false,
+        showFlag: false,
+        showEditComment: false,
+        showRemoveComment: false,
+        showEditFlag: false,
+        showRemoveFlag: false,
+        feedbackNotes: [],
+        actions: decisionActions("accepted")
       };
     }
     return {
       state: "unresolved",
       label: "Unresolved",
+      headerLabel: "",
       accepted: false,
       canAccept: true,
       showAccept: true,
       showUndoAccept: false,
-      feedbackNotes: []
+      showComment: true,
+      showFlag: true,
+      showEditComment: false,
+      showRemoveComment: false,
+      showEditFlag: false,
+      showRemoveFlag: false,
+      feedbackNotes: [],
+      actions: decisionActions("unresolved")
     };
+  }
+
+  function decisionActions(state) {
+    if (state === "accepted") return ["accepted", "undo_accept"];
+    if (state === "needs_revision") return ["edit_comment", "remove_comment"];
+    if (state === "flagged") return ["edit_flag", "remove_flag"];
+    return ["accept", "comment", "flag"];
   }
 
   function clearAccepted(session, changeId) {
@@ -245,13 +312,13 @@
     for (const card of logicalReviewCards(model)) {
       if (!card?.id) continue;
       if (card.kind === "unchanged" || card.kind === "unmapped" || card.kind === "title_unchanged") {
-        const feedback = feedbackForChange(revisionAnnotations, card.id);
+        const feedback = feedbackForChange(revisionAnnotations, card.id, feedbackMetaForChange(card));
         if (!feedback.length) return false;
         continue;
       }
       const decision = cardDecision({
         accepted: accepted.has(card.id),
-        feedbackNotes: feedbackForChange(revisionAnnotations, card.id)
+        feedbackNotes: feedbackForChange(revisionAnnotations, card.id, feedbackMetaForChange(card))
       });
       if (decision.state === "unresolved") return false;
     }
@@ -261,7 +328,7 @@
   function acceptAllEligibleIds(model, revisionAnnotations = []) {
     const ids = [];
     for (const card of [...(model?.titleChange ? [model.titleChange] : []), ...(model?.changes || []), ...(model?.unmatchedReviewItems || [])]) {
-      const feedback = feedbackForChange(revisionAnnotations, card.id);
+      const feedback = feedbackForChange(revisionAnnotations, card.id, feedbackMetaForChange(card));
       if (!feedback.length) ids.push(card.id);
     }
     return ids;
@@ -390,7 +457,10 @@
     revisionDisplayState,
     applyAccepted,
     feedbackForChange,
+    inferRevisionFeedbackKind,
+    normalizeRevisionFeedback,
     cardDecision,
+    decisionActions,
     clearAccepted,
     setAccepted,
     toggleAccepted,

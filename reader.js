@@ -197,26 +197,98 @@
       comment.className = "revision-note-comment";
       comment.textContent = note.comment;
       block.append(comment);
-      const edit = node("button", "", "Edit");
-      edit.type = "button";
-      edit.addEventListener("click", () => openEditor(note));
-      block.append(edit);
       section.append(block);
     }
     card.append(section);
   }
+  function appendDecisionStatus(card, decision) {
+    if (decision.state === "unresolved") return;
+    const status = node("p", `revision-decision-status${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted-status" : ""}`, decision.label);
+    status.dataset.decisionStatus = decision.state;
+    card.append(status);
+  }
+  function appendDecisionActions(actions, change, decision) {
+    if (decision.showAccept) {
+      const accept = node("button", "", "Accept");
+      accept.type = "button";
+      accept.dataset.changeAction = "accept";
+      accept.addEventListener("click", () => acceptChange(change.id));
+      actions.append(accept);
+    }
+    if (decision.showUndoAccept) {
+      const undo = node("button", "is-accepted", "Undo Accept");
+      undo.type = "button";
+      undo.dataset.changeAction = "undo-accept";
+      undo.addEventListener("click", () => acceptChange(change.id));
+      actions.append(undo);
+    }
+    if (decision.showComment) {
+      const comment = node("button", "", "Comment");
+      comment.type = "button";
+      comment.dataset.changeAction = "comment";
+      comment.addEventListener("click", () => commentOnChange(change, "wording", "", "comment"));
+      actions.append(comment);
+    }
+    if (decision.showFlag) {
+      const flag = node("button", "", "Flag");
+      flag.type = "button";
+      flag.dataset.changeAction = "flag";
+      flag.addEventListener("click", () => flagChange(change));
+      actions.append(flag);
+    }
+    if (decision.showEditComment) {
+      const edit = node("button", "", "Edit Comment");
+      edit.type = "button";
+      edit.dataset.changeAction = "edit-comment";
+      edit.addEventListener("click", () => {
+        const existing = decision.feedbackNotes.find((note) => note.revisionFeedbackKind !== "flag") || decision.feedbackNotes[0];
+        if (existing) openEditor(existing);
+        else commentOnChange(change, "wording", "", "comment");
+      });
+      actions.append(edit);
+    }
+    if (decision.showRemoveComment) {
+      const remove = node("button", "", "Remove Comment");
+      remove.type = "button";
+      remove.dataset.changeAction = "remove-comment";
+      remove.addEventListener("click", () => removeRevisionFeedback(change.id, "comment"));
+      actions.append(remove);
+    }
+    if (decision.showEditFlag) {
+      const edit = node("button", "", "Edit Flag");
+      edit.type = "button";
+      edit.dataset.changeAction = "edit-flag";
+      edit.addEventListener("click", () => {
+        const existing = decision.feedbackNotes.find((note) => note.revisionFeedbackKind === "flag") || decision.feedbackNotes[0];
+        if (existing) openEditor(existing);
+        else flagChange(change);
+      });
+      actions.append(edit);
+    }
+    if (decision.showRemoveFlag) {
+      const remove = node("button", "", "Remove Flag");
+      remove.type = "button";
+      remove.dataset.changeAction = "remove-flag";
+      remove.addEventListener("click", () => removeRevisionFeedback(change.id, "flag"));
+      actions.append(remove);
+    }
+  }
   function appendChangeCard(body, change, options = {}) {
     const decision = change.decision || MaxQuillRevisionReview.cardDecision({ accepted: change.accepted, feedbackNotes: change.revisionFeedback || [] });
-    const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${decision.accepted ? " is-accepted" : ""}${decision.state === "needs_revision" || decision.state === "flagged" ? " is-needs-revision" : ""}`);
+    const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${decision.accepted ? " is-accepted" : ""}${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}`);
     card.dataset.changeId = change.id;
     card.dataset.decision = decision.state;
+    if (change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id) card.dataset.sourceOwnerNoteId = change.sourceOwnerNoteId || change.ownerReviews[0].id;
     const header = node("div", "revision-change-header");
     const title = options.title || (change.origin === "owner_requested" ? "Revision" : "Additional revision change");
     header.append(node("p", "revision-kicker", title));
-    header.append(node("span", "revision-kind-badge", kindLabel(change.kind)));
+    const headerMeta = node("div", "revision-change-header-meta");
+    if (decision.headerLabel) headerMeta.append(node("span", `revision-decision-badge${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.headerLabel));
+    headerMeta.append(node("span", "revision-kind-badge", kindLabel(change.kind)));
+    header.append(headerMeta);
     card.append(header);
     if (change.origin === "additional_revision") card.append(node("p", "revision-origin", originLabel(change.origin)));
-    if (decision.state !== "unresolved") card.append(node("p", "revision-decision-status", decision.label));
+    appendDecisionStatus(card, decision);
     const pair = node("div", "revision-pair");
     appendSide(pair, "New Version", change.after, change.afterContext, change.inline, "inserted", change.after?.id || null, null);
     appendSide(pair, "Old Version", change.before, change.beforeContext, change.inline, "removed", null, change.ownerReviews);
@@ -224,31 +296,7 @@
     appendOwnerReviews(card, change.ownerReviews);
     appendRevisionFeedback(card, decision.feedbackNotes);
     const actions = node("div", "revision-actions");
-    if (decision.showAccept) {
-      const accept = node("button", "", "Accept"); accept.type = "button"; accept.dataset.changeAction = "accept"; accept.addEventListener("click", () => acceptChange(change.id));
-      actions.append(accept);
-    }
-    if (decision.showUndoAccept) {
-      const undo = node("button", "is-accepted", "Accepted · Undo"); undo.type = "button"; undo.dataset.changeAction = "accept"; undo.addEventListener("click", () => acceptChange(change.id));
-      actions.append(undo);
-    }
-    if (decision.state !== "accepted") {
-      const comment = node("button", "", decision.feedbackNotes.some((note) => note.revisionFeedbackKind !== "flag") ? "Edit Comment" : "Comment");
-      comment.type = "button";
-      comment.addEventListener("click", () => {
-        const existing = decision.feedbackNotes.find((note) => note.revisionFeedbackKind !== "flag") || decision.feedbackNotes[0];
-        if (existing) openEditor(existing);
-        else commentOnChange(change, "wording", "", "comment");
-      });
-      const flag = node("button", "", decision.feedbackNotes.some((note) => note.revisionFeedbackKind === "flag") ? "Edit Flag" : "Flag");
-      flag.type = "button";
-      flag.addEventListener("click", () => {
-        const existing = decision.feedbackNotes.find((note) => note.revisionFeedbackKind === "flag");
-        if (existing) openEditor(existing);
-        else commentOnChange(change, "other", "Flagged for revision.", "flag");
-      });
-      actions.append(comment, flag);
-    }
+    appendDecisionActions(actions, change, decision);
     card.append(actions); body.append(card);
   }
   function changeParagraph(change) {
@@ -283,9 +331,79 @@
     openEditor(null, category);
     if (preset) document.querySelector("#annotation-comment").value = preset;
   }
+  function flagChange(change) {
+    if (!revisionContext || !change?.id) return;
+    const existing = MaxQuillRevisionReview.feedbackForChange(review?.annotations || [], change.id, {
+      sourceOwnerNoteId: change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id || null
+    }).find((note) => note.revisionFeedbackKind === "flag");
+    if (existing) {
+      openEditor(existing);
+      return;
+    }
+    if (change?.kind === "title" || change?.kind === "title_unchanged" || change?.annotation?.target === "chapter_title") {
+      commentOnChange(change, "other", "Flagged for revision.", "flag");
+      return;
+    }
+    const paragraph = changeParagraph(change) || (change.after ? { id: change.after.id, text: change.after.text } : null);
+    if (!paragraph) {
+      commentOnChange(change, "other", "Flagged for revision.", "flag");
+      return;
+    }
+    const annotation = {
+      id: annotationId(),
+      paragraphId: paragraph.id,
+      selectedText: paragraph.text,
+      selectionStart: 0,
+      selectionEnd: paragraph.text.length,
+      category: "other",
+      comment: "Flagged for revision.",
+      status: "open",
+      requiresCanonChange: false,
+      revisionChangeId: change.id,
+      revisionFeedbackKind: "flag",
+      sourceOwnerNoteId: change.sourceOwnerNoteId || change.ownerReviews?.[0]?.id || null
+    };
+    const validation = MaxQuillReviewContract.validateOwnerReviewPackage(buildOwnerReviewPackage([annotation]), sourcePackage);
+    if (!validation.valid) {
+      commentOnChange(change, "other", "Flagged for revision.", "flag");
+      return;
+    }
+    review.annotations.push(annotation);
+    revisionContext.session = MaxQuillRevisionReview.clearAccepted(revisionContext.session, change.id);
+    review.completed = false;
+    review.reviewedAt = null;
+    saveReview();
+    saveRevisionSession();
+    refreshRevisionModel();
+    renderChapterBody();
+    updateReviewUi();
+  }
+  function removeRevisionFeedback(changeId, kind) {
+    if (!revisionContext || !changeId) return;
+    const before = review.annotations.length;
+    review.annotations = review.annotations.filter((note) => {
+      if (note.status !== "open") return true;
+      const linked = note.revisionChangeId === changeId || (note.sourceOwnerNoteId && note.sourceOwnerNoteId === changeId.replace(/^owner:/, ""));
+      if (!linked) return true;
+      const noteKind = MaxQuillRevisionReview.inferRevisionFeedbackKind(note);
+      if (kind && noteKind !== kind) return true;
+      return false;
+    });
+    if (review.annotations.length === before) return;
+    review.completed = false;
+    review.reviewedAt = null;
+    saveReview();
+    saveRevisionSession();
+    refreshRevisionModel();
+    renderChapterBody();
+    updateReviewUi();
+  }
   function acceptChange(changeId) {
     if (!revisionContext) return;
-    const feedback = MaxQuillRevisionReview.feedbackForChange(review?.annotations || [], changeId);
+    const card = [...(revisionContext.model?.changes || []), revisionContext.model?.titleChange, ...(revisionContext.model?.unmatchedReviewItems || [])].find((item) => item?.id === changeId);
+    const feedback = MaxQuillRevisionReview.feedbackForChange(review?.annotations || [], changeId, {
+      sourceOwnerNoteId: card?.sourceOwnerNoteId || card?.ownerReviews?.[0]?.id || card?.annotation?.id || null
+    });
     if (feedback.length && !revisionContext.session.acceptedChangeIds.includes(changeId)) return;
     revisionContext.session = MaxQuillRevisionReview.toggleAccepted(revisionContext.session, changeId);
     saveRevisionSession(); refreshRevisionModel(); renderChapterBody(); updateReviewUi();
@@ -322,16 +440,21 @@
     if (model.titleChange) appendChangeCard(body, model.titleChange, { title: "Chapter title" });
     model.changes.forEach((change) => appendChangeCard(body, change));
     model.unmatchedReviewItems.forEach((item) => {
+      const changeLike = { ...item, id: item.id, after: item.after, sourceOwnerNoteId: item.annotation?.id || item.sourceOwnerNoteId || null, ownerReviews: item.annotation ? [item.annotation] : [] };
       const decision = item.decision || MaxQuillRevisionReview.cardDecision({ accepted: revisionContext.session.acceptedChangeIds.includes(item.id), feedbackNotes: item.revisionFeedback || [] });
-      const card = node("article", `revision-change${decision.state === "needs_revision" || decision.state === "flagged" ? " is-needs-revision" : ""}`);
+      const card = node("article", `revision-change${decision.state === "needs_revision" ? " is-needs-revision" : ""}${decision.state === "flagged" ? " is-flagged is-needs-revision" : ""}`);
       card.dataset.changeId = item.id;
       card.dataset.decision = decision.state;
+      if (changeLike.sourceOwnerNoteId) card.dataset.sourceOwnerNoteId = changeLike.sourceOwnerNoteId;
       const titleItem = item.kind === "title_unchanged" || item.annotation?.target === "chapter_title";
       const header = node("div", "revision-change-header");
       header.append(node("p", "revision-kicker", titleItem ? "Chapter title" : "Owner Review Note"));
-      header.append(node("span", "revision-kind-badge", "No text change"));
+      const headerMeta = node("div", "revision-change-header-meta");
+      if (decision.headerLabel) headerMeta.append(node("span", `revision-decision-badge${decision.state === "flagged" ? " is-flagged" : decision.state === "accepted" ? " is-accepted" : ""}`, decision.headerLabel));
+      headerMeta.append(node("span", "revision-kind-badge", "No text change"));
+      header.append(headerMeta);
       card.append(header);
-      if (decision.state !== "unresolved") card.append(node("p", "revision-decision-status", decision.label));
+      appendDecisionStatus(card, decision);
       card.append(node("p", "revision-alert", "Review item produced no detectable text change"));
       if (item.after || item.before) {
         const pair = node("div", "revision-pair");
@@ -342,19 +465,7 @@
       appendOwnerReviews(card, item.annotation ? [item.annotation] : []);
       appendRevisionFeedback(card, decision.feedbackNotes);
       const actions = node("div", "revision-actions");
-      if (decision.showAccept) {
-        const accept = node("button", "", "Accept"); accept.type = "button"; accept.addEventListener("click", () => acceptChange(item.id));
-        actions.append(accept);
-      }
-      if (decision.showUndoAccept) {
-        const undo = node("button", "is-accepted", "Accepted · Undo"); undo.type = "button"; undo.addEventListener("click", () => acceptChange(item.id));
-        actions.append(undo);
-      }
-      if (decision.state !== "accepted") {
-        const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange({ ...item, id: item.id, after: item.after, sourceOwnerNoteId: item.annotation?.id }, "wording", "", "comment"));
-        const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange({ ...item, id: item.id, after: item.after, sourceOwnerNoteId: item.annotation?.id }, "other", "Flagged for revision.", "flag"));
-        actions.append(comment, flag);
-      }
+      appendDecisionActions(actions, changeLike, decision);
       card.append(actions);
       body.append(card);
     });
@@ -413,6 +524,11 @@
     const selectionStart = Math.min(beforeStart.toString().length, beforeEnd.toString().length), selectionEnd = Math.max(beforeStart.toString().length, beforeEnd.toString().length); if (selectionStart === selectionEnd) return null;
     const paragraph = sourcePackage.content.find((item) => item.id === startParagraph.dataset.paragraphId); if (!paragraph) return null;
     const candidate = { paragraphId: paragraph.id, startParagraphId: startParagraph.dataset.paragraphId, endParagraphId: endParagraph.dataset.paragraphId, selectedText: paragraph.text.substring(selectionStart, selectionEnd), selectionStart, selectionEnd, rect: range.getBoundingClientRect() };
+    const changeCard = startParagraph.closest("[data-change-id]");
+    if (changeCard?.dataset.changeId) {
+      candidate.revisionChangeId = changeCard.dataset.changeId;
+      if (changeCard.dataset.sourceOwnerNoteId) candidate.sourceOwnerNoteId = changeCard.dataset.sourceOwnerNoteId;
+    }
     return MaxQuillSelectionLogic.validateSelectionCandidate(sourcePackage, candidate).valid ? candidate : null;
   }
   function readSelectionState() {
@@ -437,13 +553,17 @@
     event.preventDefault(); if (showingOriginalNotes()) { showMessage("#annotation-message", "The original review is read-only."); return; } const existing = editingId ? review.annotations.find((item) => item.id === editingId) : null, selection = existing || pendingSelection; if (!selection) return;
     const isTitle = existing?.target === "chapter_title" || selection.target === "chapter_title";
     const revisionChangeId = selection.revisionChangeId || existing?.revisionChangeId || null;
-    const revisionFeedbackKind = selection.revisionFeedbackKind || existing?.revisionFeedbackKind || (revisionChangeId ? "comment" : null);
+    let revisionFeedbackKind = selection.revisionFeedbackKind || existing?.revisionFeedbackKind || (revisionChangeId ? "comment" : null);
     const sourceOwnerNoteId = selection.sourceOwnerNoteId || existing?.sourceOwnerNoteId || null;
     const annotation = isTitle
       ? { id: existing?.id || annotationId(), target: "chapter_title", selectedText: sourcePackage.title, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked }
       : { id: existing?.id || annotationId(), paragraphId: selection.paragraphId, selectedText: selection.selectedText, selectionStart: selection.selectionStart, selectionEnd: selection.selectionEnd, category: document.querySelector("#annotation-type").value, comment: document.querySelector("#annotation-comment").value.trim(), status: document.querySelector("#annotation-status").value, requiresCanonChange: document.querySelector("#requires-canon-change").checked };
     if (revisionChangeId) {
       annotation.revisionChangeId = revisionChangeId;
+      if (!revisionFeedbackKind || revisionFeedbackKind === "comment") {
+        const inferred = MaxQuillRevisionReview.inferRevisionFeedbackKind({ ...annotation, revisionChangeId, revisionFeedbackKind });
+        if (inferred === "flag") revisionFeedbackKind = "flag";
+      }
       annotation.revisionFeedbackKind = revisionFeedbackKind === "flag" ? "flag" : "comment";
       if (sourceOwnerNoteId) annotation.sourceOwnerNoteId = sourceOwnerNoteId;
     }
@@ -456,7 +576,12 @@
     if (revisionContext && annotation.revisionChangeId) revisionContext.session = MaxQuillRevisionReview.clearAccepted(revisionContext.session, annotation.revisionChangeId);
     review.completed = false; review.reviewedAt = null; saveReview(); if (revisionContext) { saveRevisionSession(); refreshRevisionModel(); } closeEditor(); renderChapterBody(); updateReviewUi();
   }
-  function quickFlag() { if (!pendingSelection) return; openEditor(null, "other"); document.querySelector("#annotation-comment").value = "Flagged for revision."; }
+  function quickFlag() {
+    if (!pendingSelection) return;
+    pendingSelection = { ...pendingSelection, revisionFeedbackKind: "flag" };
+    openEditor(null, "other");
+    document.querySelector("#annotation-comment").value = "Flagged for revision.";
+  }
   function closeEditor() { document.querySelector("#annotation-dialog").close(); hideSelectionActions(true); window.getSelection()?.removeAllRanges(); pendingSelection = null; editingId = null; actionEngaged = false; }
   function deleteAnnotation() {
     if (showingOriginalNotes() || !editingId) return;
