@@ -15,13 +15,18 @@
   async function loadActivity(book) {
     const root = document.querySelector("#owner-activity");
     const meta = document.querySelector("#activity-meta");
-    if (!root || !window.MaxQuillOwnerActivity || !window.MaxQuillReaderFeedbackApi) return;
+    if (!root || !window.MaxQuillOwnerActivity || !window.MaxQuillReaderFeedbackApi || !window.MaxQuillReviewApi) return;
     try {
+      const jobs = await MaxQuillOwnerActivity.refreshLocalJobs();
+      const resultPackagesByJobId = await MaxQuillOwnerActivity.hydrateRevisionResults({ jobs });
+      const completedJobIds = MaxQuillOwnerActivity.readCompletedRevisionJobIds(localStorage, jobs, resultPackagesByJobId);
       const items = await MaxQuillOwnerActivity.loadHomepageActivity({
         book,
         chapterOverview: (bookId) => MaxQuillReaderFeedbackApi.chapterOverview(bookId),
         chapterComments: (query) => MaxQuillReaderFeedbackApi.chapterComments(query),
-        localJobs: MaxQuillOwnerActivity.readLocalJobs()
+        localJobs: jobs,
+        resultPackagesByJobId,
+        completedJobIds
       });
       root.innerHTML = MaxQuillOwnerActivity.render(items);
       if (meta) meta.textContent = activityMeta(items);

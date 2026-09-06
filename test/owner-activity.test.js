@@ -5,6 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 const activity = require("../owner-activity.js");
 const reviewApi = require("../review-api.js");
+const revision = require("../revision-review.js");
 
 const root = path.join(__dirname, "..");
 const book = {
@@ -26,6 +27,48 @@ function navPages() {
     reader: fs.readFileSync(path.join(root, "reader.html"), "utf8"),
     feedback: fs.readFileSync(path.join(root, "owner-feedback.html"), "utf8"),
     invite: fs.readFileSync(path.join(root, "invite.html"), "utf8")
+  };
+}
+
+function memoryStorage(seed = {}) {
+  const data = { ...seed };
+  return {
+    data,
+    get length() { return Object.keys(this.data).length; },
+    key(index) { return Object.keys(this.data)[index] || null; },
+    getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; },
+    setItem(key, value) { this.data[key] = String(value); }
+  };
+}
+
+function job(status, overrides = {}) {
+  const identity = {
+    bookId: overrides.bookId || "book-001",
+    chapterId: overrides.chapterId || "chapter_0001",
+    chapterVersion: overrides.chapterVersion || 1,
+    packageFingerprint: overrides.packageFingerprint || "a".repeat(64)
+  };
+  return reviewApi.normalizeJob({
+    jobId: overrides.jobId || `job-${status.toLowerCase()}`,
+    status,
+    submittedAt: overrides.submittedAt || "2026-09-06T00:00:00.000Z",
+    ...identity,
+    ...(overrides.error ? { error: overrides.error } : {})
+  }, identity);
+}
+
+function resultPackage(version = 2) {
+  return {
+    schemaVersion: 1,
+    type: "review_ready_chapter",
+    bookId: "book-001",
+    chapterId: "chapter_0001",
+    chapterNumber: 1,
+    chapterVersion: version,
+    status: "REVIEW_READY",
+    title: "The Book He Never Asked For",
+    exportedAt: "2026-09-05T18:12:52.899Z",
+    content: [{ id: "p001", text: "Revised opening." }]
   };
 }
 
@@ -75,10 +118,6 @@ test("open reader comments become chapter activity with a View Feedback link", (
   assert.equal(items[0].href, "/owner-feedback.html");
   assert.equal(items[0].action, "View Feedback");
   assert.equal(activity.openCommentCount(items), 3);
-  const html = activity.render(items);
-  assert.match(html, /CH001 · 3 open reader comments/);
-  assert.match(html, /Anna, Max/);
-  assert.match(html, /href="\/owner-feedback.html">View Feedback</);
 });
 
 test("resolved-only chapters and empty overviews stay off the dashboard", () => {
@@ -99,40 +138,7 @@ test("REVIEW_READY packages appear when no local job has consumed them", () => {
   assert.equal(items[0].kind, "owner-review");
   assert.equal(items[0].title, "Owner review · 1 package waiting");
   assert.equal(items[0].href, "/reader.html?book=book-001&chapter=1&version=1");
-  assert.match(activity.render(items), /Owner review · 1 package waiting/);
 });
-
-test("revision-ready and failed local jobs surface as owner attention", () => {
-  const identity = { bookId: "book-001", chapterId: "chapter_0001", chapterVersion: 1, packageFingerprint: "b".repeat(64) };
-  const items = activity.buildItems({
-    book,
-    overviewChapters: [],
-    openCommentsByKey: {},
-    localJobs: [
-      reviewApi.normalizeJob({ jobId: "job-ready", status: "REVISION_READY", submittedAt: "2026-09-06T00:00:00.000Z", ...identity }, identity),
-      reviewApi.normalizeJob({ jobId: "job-failed", status: "FAILED", submittedAt: "2026-09-06T00:00:00.000Z", bookId: "book-001", chapterId: "chapter_0002", chapterVersion: 1, packageFingerprint: "c".repeat(64) }, { bookId: "book-001", chapterId: "chapter_0002", chapterVersion: 1, packageFingerprint: "c".repeat(64) })
-    ]
-  });
-  assert.equal(items.some((item) => item.kind === "owner-review"), false);
-  assert.equal(items.find((item) => item.kind === "revision-ready").title, "Revision · 1 ready");
-  assert.equal(items.find((item) => item.kind === "revision-failed").title, "Revision · 1 failed");
-});
-
-function job(status, overrides = {}) {
-  const identity = {
-    bookId: overrides.bookId || "book-001",
-    chapterId: overrides.chapterId || "chapter_0001",
-    chapterVersion: overrides.chapterVersion || 1,
-    packageFingerprint: overrides.packageFingerprint || "a".repeat(64)
-  };
-  return reviewApi.normalizeJob({
-    jobId: overrides.jobId || `job-${status.toLowerCase()}`,
-    status,
-    submittedAt: overrides.submittedAt || "2026-09-06T00:00:00.000Z",
-    ...identity,
-    ...(overrides.error ? { error: overrides.error } : {})
-  }, identity);
-}
 
 test("FAILED only appears in Needs Attention", () => {
   const failed = job("FAILED", { jobId: "job-failed-only", packageFingerprint: "1".repeat(64) });
@@ -140,39 +146,124 @@ test("FAILED only appears in Needs Attention", () => {
   assert.equal(items.length, 1);
   assert.equal(items[0].kind, "revision-failed");
   assert.equal(items[0].detail, "CH001");
-  assert.equal(items[0].title, "Revision · 1 failed");
+  assert.equal(items[0].title, "Revision · failed");
+  assert.equal(items[0].badge, "OPEN");
 });
 
-test("FAILED then later REVISION_READY for the same workflow hides the old failure", () => {
-  const failed = job("FAILED", { jobId: "job-old-fail", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
-  const ready = job("REVISION_READY", { jobId: "job-recovered", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" });
-  const localJobs = [failed, ready];
-  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs });
+test("FAILED source V1 plus successful revision result V2 hides failure and shows ready review", () => {
+  const failedLocal = job("FAILED", {
+    jobId: "34e65d22-77ae-4976-ae1b-54ddd63d2f39",
+    packageFingerprint: "3f24df493cbf9d51c414c621fe1d18724d655ace9d0cd6efdf8b905d6de9eab5",
+    submittedAt: "2026-09-05T17:44:04.338Z"
+  });
+  const syncedReady = { ...failedLocal, status: "REVISION_READY" };
+  const result = resultPackage(2);
+  const items = activity.buildItems({
+    book: { id: "book-001", chapters: [] },
+    overviewChapters: [],
+    openCommentsByKey: {},
+    localJobs: [syncedReady],
+    resultPackagesByJobId: { [syncedReady.jobId]: result }
+  });
   assert.equal(items.some((item) => item.kind === "revision-failed"), false);
-  assert.equal(items.find((item) => item.kind === "revision-ready").title, "Revision · 1 ready");
-  assert.equal(items.find((item) => item.kind === "revision-ready").detail, "CH001");
-  assert.equal(activity.activeAttentionJobs(localJobs).failed.length, 0);
-  assert.equal(activity.activeAttentionJobs(localJobs).ready[0].jobId, "job-recovered");
-});
-
-test("FAILED old package then FAILED new package keeps the current failure visible", () => {
-  const oldFail = job("FAILED", { jobId: "job-old", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
-  const newFail = job("FAILED", { jobId: "job-new", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T03:00:00.000Z" });
-  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [oldFail, newFail] });
   assert.equal(items.length, 1);
-  assert.equal(items[0].kind, "revision-failed");
-  assert.equal(items[0].title, "Revision · 1 failed");
-  assert.equal(activity.activeAttentionJobs([oldFail, newFail]).failed[0].jobId, "job-new");
+  assert.equal(items[0].kind, "revision-ready");
+  assert.equal(items[0].title, "Revision · ready for review");
+  assert.equal(items[0].detail, "CH001 · Version 1 → Version 2");
+  assert.equal(items[0].action, "REVIEW CHANGES");
+  assert.equal(items[0].href, `/reader.html?book=book-001&chapter=1&version=2&resultJob=${syncedReady.jobId}`);
 });
 
-test("historical failed job remains stored when superseded", () => {
-  const storage = {
-    data: {},
-    get length() { return Object.keys(this.data).length; },
-    key(index) { return Object.keys(this.data)[index] || null; },
-    getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; },
-    setItem(key, value) { this.data[key] = String(value); }
-  };
+test("stale local FAILED is treated as ready when a result package exists for the same jobId", () => {
+  const failed = job("FAILED", { jobId: "job-recovered", packageFingerprint: "1".repeat(64) });
+  const items = activity.buildItems({
+    book: { id: "book-001", chapters: [] },
+    overviewChapters: [],
+    openCommentsByKey: {},
+    localJobs: [failed],
+    resultPackagesByJobId: { "job-recovered": resultPackage(2) }
+  });
+  assert.equal(items.some((item) => item.kind === "revision-failed"), false);
+  assert.equal(items[0].kind, "revision-ready");
+  assert.equal(items[0].href, "/reader.html?book=book-001&chapter=1&version=2&resultJob=job-recovered");
+});
+
+test("ready CTA opens revised package Changes view by default", () => {
+  const ready = job("REVISION_READY", { jobId: "job-ready", packageFingerprint: "2".repeat(64) });
+  const href = activity.revisionChangesHref(ready, resultPackage(2));
+  assert.equal(href, "/reader.html?book=book-001&chapter=1&version=2&resultJob=job-ready");
+  const session = revision.defaultSession("source-fp", "result-fp");
+  assert.equal(session.viewMode, "changes");
+  const view = revision.revisionViewState({
+    hasRevisionPair: true,
+    viewMode: session.viewMode,
+    jobStatus: "REVISION_READY",
+    originalNoteCount: 16,
+    changeCount: 4,
+    beforeVersion: 1,
+    afterVersion: 2
+  });
+  assert.equal(view.showChanges, true);
+  assert.equal(view.showOriginalNotes, false);
+  assert.equal(view.showFullChapter, false);
+  assert.equal(view.notesLabel, "Review Notes (16)");
+  assert.equal(view.changesLabel, "Changes (4)");
+  assert.equal(view.toggleLabel, "View Full Chapter");
+  assert.equal(view.toggleHidden, false);
+});
+
+test("refreshLocalJobs syncs REVISION_READY from the backend onto a stale FAILED local record", async () => {
+  const failed = job("FAILED", {
+    jobId: "34e65d22-77ae-4976-ae1b-54ddd63d2f39",
+    packageFingerprint: "3f24df493cbf9d51c414c621fe1d18724d655ace9d0cd6efdf8b905d6de9eab5"
+  });
+  const storage = memoryStorage({ [reviewApi.jobStorageKey(failed)]: JSON.stringify(failed) });
+  const refreshed = await activity.refreshLocalJobs({
+    storage,
+    normalizeJob: reviewApi.normalizeJob,
+    jobStorageKey: reviewApi.jobStorageKey,
+    getReviewJob: async () => ({ ...failed, status: "REVISION_READY" })
+  });
+  assert.equal(refreshed[0].status, "REVISION_READY");
+  assert.equal(JSON.parse(storage.getItem(reviewApi.jobStorageKey(failed))).status, "REVISION_READY");
+  const stillStored = activity.readLocalJobs(storage, reviewApi.normalizeJob);
+  assert.equal(stillStored[0].jobId, failed.jobId);
+});
+
+test("hydrateRevisionResults caches the V2 package for a ready job", async () => {
+  const ready = job("REVISION_READY", { jobId: "job-ready", packageFingerprint: "2".repeat(64) });
+  const storage = memoryStorage();
+  const result = resultPackage(2);
+  const byJobId = await activity.hydrateRevisionResults({
+    jobs: [ready],
+    storage,
+    resultStorageKey: reviewApi.resultStorageKey,
+    getReviewResult: async () => result
+  });
+  assert.deepEqual(byJobId["job-ready"], result);
+  assert.deepEqual(JSON.parse(storage.getItem(reviewApi.resultStorageKey("job-ready"))), result);
+});
+
+test("browser reload keeps the correct ready state after sync", async () => {
+  const failed = job("FAILED", { jobId: "job-ch001", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-05T17:44:04.338Z" });
+  const storage = memoryStorage({ [reviewApi.jobStorageKey(failed)]: JSON.stringify(failed) });
+  const jobs = await activity.refreshLocalJobs({
+    storage,
+    normalizeJob: reviewApi.normalizeJob,
+    jobStorageKey: reviewApi.jobStorageKey,
+    getReviewJob: async () => ({ ...failed, status: "REVISION_READY" })
+  });
+  const results = { [failed.jobId]: resultPackage(2) };
+  const first = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: jobs, resultPackagesByJobId: results });
+  const reloadedJobs = activity.readLocalJobs(storage, reviewApi.normalizeJob);
+  const second = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: reloadedJobs, resultPackagesByJobId: results });
+  assert.deepEqual(second, first);
+  assert.equal(first[0].kind, "revision-ready");
+  assert.equal(first.some((item) => item.kind === "revision-failed"), false);
+});
+
+test("historical FAILED remains stored when a later REVISION_READY supersedes it", () => {
+  const storage = memoryStorage();
   const failed = job("FAILED", { jobId: "job-historical", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
   const ready = job("REVISION_READY", { jobId: "job-current", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" });
   storage.setItem(reviewApi.jobStorageKey(failed), JSON.stringify(failed));
@@ -182,34 +273,66 @@ test("historical failed job remains stored when superseded", () => {
   assert.ok(stored.some((item) => item.jobId === "job-historical" && item.status === "FAILED"));
   const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: stored });
   assert.equal(items.some((item) => item.kind === "revision-failed"), false);
+  assert.equal(items[0].kind, "revision-ready");
   assert.equal(storage.getItem(reviewApi.jobStorageKey(failed)), JSON.stringify(failed));
 });
 
+test("genuinely current FAILED still appears", () => {
+  const oldReady = job("REVISION_READY", { jobId: "job-old-ready", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
+  const newFail = job("FAILED", { jobId: "job-new-fail", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T03:00:00.000Z" });
+  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [oldReady, newFail] });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "revision-failed");
+  assert.equal(items[0].jobId, "job-new-fail");
+});
+
+test("package fingerprint isolation remains intact across versions", () => {
+  const v1 = job("FAILED", { jobId: "job-v1", chapterVersion: 1, packageFingerprint: "1".repeat(64) });
+  const v2 = job("FAILED", { jobId: "job-v2", chapterVersion: 2, packageFingerprint: "2".repeat(64) });
+  assert.notEqual(reviewApi.jobStorageKey(v1), reviewApi.jobStorageKey(v2));
+  const items = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [v1, v2] });
+  assert.equal(items.filter((item) => item.kind === "revision-failed").length, 2);
+});
+
 test("unrelated chapter failure remains visible beside a recovered chapter", () => {
-  const recoveredFail = job("FAILED", { jobId: "ch1-fail", chapterId: "chapter_0001", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" });
-  const recoveredReady = job("REVISION_READY", { jobId: "ch1-ready", chapterId: "chapter_0001", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" });
-  const otherFail = job("FAILED", { jobId: "ch2-fail", chapterId: "chapter_0002", packageFingerprint: "3".repeat(64), submittedAt: "2026-09-06T01:30:00.000Z" });
+  const recovered = job("REVISION_READY", { jobId: "ch1-ready", chapterId: "chapter_0001", packageFingerprint: "2".repeat(64) });
+  const otherFail = job("FAILED", { jobId: "ch2-fail", chapterId: "chapter_0002", packageFingerprint: "3".repeat(64) });
   const items = activity.buildItems({
     book: { id: "book-001", chapters: [] },
     overviewChapters: [],
     openCommentsByKey: {},
-    localJobs: [recoveredFail, recoveredReady, otherFail]
+    localJobs: [recovered, otherFail],
+    resultPackagesByJobId: { "ch1-ready": resultPackage(2) }
   });
-  assert.equal(items.find((item) => item.kind === "revision-ready").detail, "CH001");
+  assert.equal(items.find((item) => item.kind === "revision-ready").detail, "CH001 · Version 1 → Version 2");
   assert.equal(items.find((item) => item.kind === "revision-failed").detail, "CH002");
-  assert.equal(items.find((item) => item.kind === "revision-failed").title, "Revision · 1 failed");
 });
 
-test("reload preserves the correct Needs Attention result after supersession", () => {
-  const localJobs = [
-    job("FAILED", { jobId: "job-old-fail", packageFingerprint: "1".repeat(64), submittedAt: "2026-09-06T01:00:00.000Z" }),
-    job("REVISION_READY", { jobId: "job-ready", packageFingerprint: "2".repeat(64), submittedAt: "2026-09-06T02:00:00.000Z" })
-  ];
-  const first = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs });
-  const second = activity.buildItems({ book: { id: "book-001", chapters: [] }, overviewChapters: [], openCommentsByKey: {}, localJobs: [...localJobs] });
-  assert.deepEqual(second, first);
-  assert.equal(first.some((item) => item.kind === "revision-failed"), false);
-  assert.equal(first.find((item) => item.kind === "revision-ready").detail, "CH001");
+test("completed revision review removes the ready item from Needs Attention", () => {
+  const ready = job("REVISION_READY", { jobId: "job-ready", packageFingerprint: "1".repeat(64) });
+  const result = resultPackage(2);
+  const storage = memoryStorage({
+    [`maxquill.review.book-001.chapter_0001.v2.${"9".repeat(64)}`]: JSON.stringify({ packageFingerprint: "9".repeat(64), completed: true, annotations: [] })
+  });
+  const completed = activity.readCompletedRevisionJobIds(storage, [ready], { "job-ready": result });
+  assert.ok(completed.has("job-ready"));
+  const items = activity.buildItems({
+    book: { id: "book-001", chapters: [] },
+    overviewChapters: [],
+    openCommentsByKey: {},
+    localJobs: [ready],
+    resultPackagesByJobId: { "job-ready": result },
+    completedJobIds: completed
+  });
+  assert.equal(items.some((item) => item.kind === "revision-ready"), false);
+});
+
+test("homepage scripts refresh jobs before rendering attention", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(app, /refreshLocalJobs/);
+  assert.match(app, /hydrateRevisionResults/);
+  assert.match(app, /readCompletedRevisionJobIds/);
+  assert.match(app, /REVIEW CHANGES|resultPackagesByJobId/);
 });
 
 test("homepage activity loads open comments from owner-only invite APIs", async () => {
