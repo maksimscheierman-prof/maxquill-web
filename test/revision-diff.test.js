@@ -236,11 +236,12 @@ test("grouped rewrite keeps full old and new paragraphs for review", () => {
   assert.equal(model.changes[0].before.text.slice(ranges[0].start, ranges[0].end), "shared sleep chamber");
   const layout = revision.revisionComparisonLayout();
   assert.deepEqual(layout.desktopColumns, ["new", "old", "ownerNote"]);
-  assert.deepEqual(layout.desktopFractions, [0.4, 0.4, 0.2]);
+  assert.deepEqual(layout.desktopFractions, [1 / 3, 1 / 3, 1 / 3]);
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
+  assert.deepEqual(layout.mediumStack, [["new", "old"], ["ownerNote"]]);
   assert.equal(layout.labels.new, "New Version");
   assert.equal(layout.labels.old, "Old Version");
-  assert.equal(layout.labels.ownerNote, "Original Owner Review Note");
+  assert.equal(layout.labels.ownerNote, "Owner Review Note");
   assert.equal(layout.labels.additional, "Additional Revision Change");
   assert.equal(layout.labels.revisionFeedback, "Revision Review Feedback");
   assert.match(layout.additionalNote, /No Owner Review Note/);
@@ -565,6 +566,8 @@ test("owner-linked revision cards expose three-column comparison layout metadata
   const layout = revision.revisionComparisonLayout();
   assert.deepEqual(layout.desktopColumns, ["new", "old", "ownerNote"]);
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
+  assert.deepEqual(layout.mediumStack, [["new", "old"], ["ownerNote"]]);
+  assert.deepEqual(layout.desktopFractions, [1 / 3, 1 / 3, 1 / 3]);
   assert.equal(layout.desktopColumns.length, 3);
   assert.ok(layout.desktopFractions[0] + layout.desktopFractions[1] + layout.desktopFractions[2] === 1);
 });

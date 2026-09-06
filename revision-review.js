@@ -475,12 +475,13 @@
   function revisionComparisonLayout() {
     return {
       desktopColumns: ["new", "old", "ownerNote"],
-      desktopFractions: [0.4, 0.4, 0.2],
+      desktopFractions: [1 / 3, 1 / 3, 1 / 3],
+      mediumStack: [["new", "old"], ["ownerNote"]],
       mobileStack: ["new", "old", "ownerNote"],
       labels: {
         new: "New Version",
         old: "Old Version",
-        ownerNote: "Original Owner Review Note",
+        ownerNote: "Owner Review Note",
         additional: "Additional Revision Change",
         revisionFeedback: "Revision Review Feedback"
       },

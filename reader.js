@@ -221,6 +221,15 @@
     for (const note of reviews) {
       const block = node("div", "revision-review");
       block.append(node("p", "revision-note-category", MaxQuillRevisionReview.ownerAnnotationBadge(note)));
+      const selectedText = note.selectedText || note.quote || "";
+      if (selectedText) {
+        block.append(node("p", "revision-note-field-label", "Selected"));
+        const quote = document.createElement("q");
+        quote.className = "revision-note-quote";
+        quote.textContent = selectedText;
+        block.append(quote);
+      }
+      block.append(node("p", "revision-note-field-label", MaxQuillRevisionReview.ownerAnnotationKind(note) === "flag" ? "Flag" : "Comment"));
       const comment = document.createElement("blockquote");
       comment.className = "revision-note-comment";
       comment.textContent = note.comment;
@@ -517,6 +526,9 @@
     });
   }
   function renderChapterBody() {
+    const article = document.querySelector(".chapter-article");
+    if (article) article.classList.toggle("is-revision-changes", showingChanges());
+    document.documentElement.dataset.revisionView = showingChanges() ? "changes" : (showingOriginalNotes() ? "notes" : "full");
     if (showingChanges()) renderRevisionChanges();
     else if (showingOriginalNotes()) renderParagraphs(revisionContext.beforePackage, originalNotes());
     else renderParagraphs();

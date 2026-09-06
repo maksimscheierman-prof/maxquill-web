@@ -93,13 +93,16 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /appendReviewNoteColumn/);
   assert.match(script, /revision-side-note/);
   assert.match(script, /ownerAnnotationBadge|revision-owner-selection/);
-  assert.doesNotMatch(script, /revision-note-field-label", "Selected"/);
-  assert.doesNotMatch(script, /quote\.className = "revision-note-quote"/);
+  assert.match(script, /revision-note-field-label", "Selected"/);
+  assert.match(script, /quote\.className = "revision-note-quote"/);
+  assert.match(script, /revision-note-field-label", MaxQuillRevisionReview\.ownerAnnotationKind\(note\) === "flag" \? "Flag" : "Comment"/);
+  assert.match(script, /is-revision-changes/);
+  assert.match(script, /dataset\.revisionView/);
   assert.match(script, /layout\.additionalNote|additionalNote/);
   assert.match(script, /labels\.additional|Additional Revision Change/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /No Owner Review Note — this change was made independently by the reviser\./);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Additional Revision Change/);
-  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Original Owner Review Note/);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Owner Review Note/);
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
   assert.match(script, /revision-prose/);
@@ -114,9 +117,19 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.doesNotMatch(script, /revision-passage-block/);
   assert.doesNotMatch(script, /revision-owner-anchor/);
   assert.doesNotMatch(script, /Change \$\{index \+ 1\} ·/);
-  assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:2fr 2fr 1fr/);
+  assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:1fr 1fr 1fr/);
+  assert.match(css, /@container revision-card \(max-width:68rem\)\{[\s\S]*?grid-template-columns:1fr 1fr/);
+  assert.match(css, /@container revision-card \(max-width:68rem\)\{[\s\S]*?\.revision-side-note\{grid-column:1\/-1/);
+  assert.match(css, /@container revision-card \(max-width:40rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
   assert.match(css, /@media\(max-width:48rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
+  assert.match(css, /\.chapter-article\.is-revision-changes\{[^}]*96rem/);
   assert.match(css, /\.revision-side-note\{/);
+  assert.match(css, /\.revision-note-quote\{margin-bottom:/);
+  assert.match(css, /\.revision-note-field-label\{/);
+  assert.match(css, /revision-note-quote[^}]*font-size:1em/);
+  assert.match(css, /revision-note-comment[^}]*font-size:1em|revision-note-comment\{[^}]*font-size:1em/);
+  assert.match(css, /\.revision-note-category\{[^}]*font-size:\.72rem/);
+  assert.match(css, /\.revision-note-decision\{[^}]*font-size:\.72rem/);
   assert.match(css, /\.revision-side-new\{order:1\}/);
   assert.match(css, /\.revision-side-old\{order:2\}/);
   assert.match(css, /\.revision-side-note\{order:3/);
@@ -158,11 +171,14 @@ test("revision continuous prose uses green/orange/red without underlines or para
   assert.match(script, /changesReviewResolved/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Needs revision/);
 });
-test("revision comparison layout prefers New / Old / Review Note with stacked mobile order", () => {
+test("revision comparison layout prefers equal New / Old / Review Note columns", () => {
   const layout = require("../revision-review.js").revisionComparisonLayout();
   assert.deepEqual(layout.desktopColumns, ["new", "old", "ownerNote"]);
   assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
-  assert.deepEqual(layout.desktopFractions, [0.4, 0.4, 0.2]);
+  assert.deepEqual(layout.mediumStack, [["new", "old"], ["ownerNote"]]);
+  assert.deepEqual(layout.desktopFractions, [1 / 3, 1 / 3, 1 / 3]);
+  assert.equal(layout.desktopFractions[0] + layout.desktopFractions[1] + layout.desktopFractions[2], 1);
+  assert.equal(layout.labels.ownerNote, "Owner Review Note");
   assert.equal(layout.kindBadgeSecondary, true);
   assert.match(layout.additionalNote, /independently by the reviser/);
 });
