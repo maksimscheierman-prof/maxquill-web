@@ -131,7 +131,11 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.doesNotMatch(css, /\.revision-new\{[^}]*text-decoration:underline/);
   assert.doesNotMatch(css, /\.revision-changed\{[^}]*text-decoration:underline/);
   assert.doesNotMatch(css, /\.revision-removed\{[^}]*text-decoration:underline/);
+  assert.match(css, /\.revision-text\.revision-owner-selection/);
   assert.match(css, /\.revision-owner-selection\{[^}]*text-decoration:underline/);
+  // Underline must win over the general revision-text reset.
+  assert.match(css, /\.revision-text\{[^}]*text-decoration:none\}[^]*revision-text\.revision-owner-selection/);
+  assert.match(css, /\.revision-text\.revision-owner-selection[^}]*text-decoration-color:var\(--reader-text\)/);
   assert.doesNotMatch(css, /\.revision-passage\{[^}]*border:1px solid/);
   assert.doesNotMatch(css, /\.revision-passage-block\{/);
   assert.doesNotMatch(css, /\.revision-owner-anchor\{/);

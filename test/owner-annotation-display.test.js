@@ -34,6 +34,31 @@ function note(id, paragraphId, selectedText, comment, category = "wording", anno
   };
 }
 
+test("owner selected quote ranges underline the annotated old passage", () => {
+  const quote = "Lyra, on the far side of the room, made a small sound.";
+  const passage = { id: "p008", text: `Before. ${quote} After.` };
+  const note = {
+    id: "ann-lyra",
+    paragraphId: "p008",
+    selectedText: quote,
+    selectionStart: 8,
+    selectionEnd: 8 + quote.length,
+    category: "continuity",
+    comment: "Have her enter instead.",
+    status: "open",
+    requiresCanonChange: false,
+    annotationKind: "comment"
+  };
+  const ranges = revision.ownerSelectedRangesForPassage(passage, [note]);
+  assert.equal(ranges.length, 1);
+  assert.equal(passage.text.slice(ranges[0].start, ranges[0].end), quote);
+  const whole = revision.ownerSelectedRangesForPassage(
+    { id: "p008", text: quote },
+    [{ ...note, selectionStart: 0, selectionEnd: quote.length, selectedText: quote }]
+  );
+  assert.deepEqual(whole, [{ start: 0, end: quote.length }]);
+});
+
 test("CH001 owner annotation display preserves Comment/Flag and category", () => {
   const wording = note("ann-wording", "p007", "It is if you refuse food long enough.", "Change to: If you refuse food long enough, it is.", "wording", "comment");
   const flag = note("ann-maera", "p060", "But it had cost Maera more than it should have.", "Flagged for revision. Avoid implying that Maera personally paid for the book.", "canon", "flag");
@@ -110,6 +135,11 @@ test("CH001 fixtures link wording, continuity, canon flag, and genuine additiona
   assert.ok(byId["owner:ann-lyra"].memberIds.some((id) => id.includes("p005")), "door opening claimed by continuity note evidence");
   assert.match(byId["owner:ann-lyra"].after.text, /The door opened without warning/);
   assert.match(byId["owner:ann-lyra"].after.text, /Are you two actually getting up/);
+  const lyraPassage = byId["owner:ann-lyra"].before.passages.find((passage) => passage.id === "p008");
+  assert.ok(lyraPassage, "old version must include the annotated Lyra paragraph");
+  const lyraRanges = revision.ownerSelectedRangesForPassage(lyraPassage, byId["owner:ann-lyra"].ownerReviews);
+  assert.equal(lyraRanges.length, 1);
+  assert.equal(lyraPassage.text.slice(lyraRanges[0].start, lyraRanges[0].end), lyraQuote);
 
   assert.equal(byId["owner:ann-maera"].origin, "owner_requested");
   assert.equal(revision.ownerAnnotationKind(byId["owner:ann-maera"].ownerReviews[0]), "flag");

@@ -449,13 +449,21 @@
     if (!passage?.text) return [];
     const ranges = [];
     for (const note of reviews || []) {
-      if (!note?.selectedText) continue;
-      if (note.paragraphId && passage.id && note.paragraphId === passage.id && Number.isInteger(note.selectionStart) && Number.isInteger(note.selectionEnd) && note.selectionEnd > note.selectionStart && passage.text.slice(note.selectionStart, note.selectionEnd) === note.selectedText) {
+      const selected = note?.selectedText || note?.quote || "";
+      if (!selected) continue;
+      if (note.paragraphId && passage.id && note.paragraphId === passage.id && Number.isInteger(note.selectionStart) && Number.isInteger(note.selectionEnd) && note.selectionEnd > note.selectionStart && passage.text.slice(note.selectionStart, note.selectionEnd) === selected) {
         ranges.push({ start: note.selectionStart, end: note.selectionEnd });
         continue;
       }
-      const index = passage.text.indexOf(note.selectedText);
-      if (index >= 0) ranges.push({ start: index, end: index + note.selectedText.length });
+      const index = passage.text.indexOf(selected);
+      if (index >= 0) {
+        ranges.push({ start: index, end: index + selected.length });
+        continue;
+      }
+      // Whole-passage owner target: if this passage is the annotated paragraph, underline all of it.
+      if (note.paragraphId && passage.id && note.paragraphId === passage.id) {
+        ranges.push({ start: 0, end: passage.text.length });
+      }
     }
     return ranges.sort((left, right) => left.start - right.start).filter((range, index, all) => !all[index - 1] || range.start >= all[index - 1].end);
   }
