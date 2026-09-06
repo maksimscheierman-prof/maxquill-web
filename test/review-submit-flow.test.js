@@ -93,6 +93,8 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /appendReviewNoteColumn/);
   assert.match(script, /revision-side-note/);
   assert.match(script, /ownerAnnotationBadge|revision-owner-selection/);
+  assert.doesNotMatch(script, /revision-note-field-label", "Selected"/);
+  assert.doesNotMatch(script, /quote\.className = "revision-note-quote"/);
   assert.match(script, /layout\.additionalNote|additionalNote/);
   assert.match(script, /labels\.additional|Additional Revision Change/);
   assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /No Owner Review Note — this change was made independently by the reviser\./);

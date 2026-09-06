@@ -221,16 +221,6 @@
     for (const note of reviews) {
       const block = node("div", "revision-review");
       block.append(node("p", "revision-note-category", MaxQuillRevisionReview.ownerAnnotationBadge(note)));
-      if (note.selectedText) {
-        const selectedLabel = node("p", "revision-note-field-label", "Selected");
-        block.append(selectedLabel);
-        const quote = document.createElement("q");
-        quote.className = "revision-note-quote";
-        quote.textContent = note.selectedText;
-        block.append(quote);
-      }
-      const commentLabel = node("p", "revision-note-field-label", MaxQuillRevisionReview.ownerAnnotationKind(note) === "flag" ? "Flag" : "Comment");
-      block.append(commentLabel);
       const comment = document.createElement("blockquote");
       comment.className = "revision-note-comment";
       comment.textContent = note.comment;
