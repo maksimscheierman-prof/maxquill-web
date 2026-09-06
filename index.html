@@ -1,2 +1,47 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Your MaxQuill library for immersive serialized fiction."><meta name="theme-color" content="#0c0b0a"><title>Library | MaxQuill</title><link rel="stylesheet" href="styles.css"></head>
-<body data-page="library"><header class="site-header shell"><a class="wordmark" href="index.html">MAXQUILL</a><span class="brand-note">Original serialized fiction</span></header><main class="shell page-main"><section class="intro" aria-labelledby="page-title"><p class="eyebrow">Private reader preview</p><h1 id="page-title">Stories, kept close.</h1><p>MaxQuill is a quiet home for immersive, long-form fiction, designed for comfortable reading from the first chapter to the thousandth.</p></section><section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your Library</h2><span>1 title</span></div><div id="library-content" aria-live="polite"><p class="loading">Opening your library&hellip;</p></div></section></main><footer class="site-footer shell">&copy; 2026 MaxQuill &middot; Private reader preview</footer><script src="app.js" defer></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Your MaxQuill library for immersive serialized fiction.">
+  <meta name="theme-color" content="#0c0b0a">
+  <title>Library | MaxQuill</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="library">
+  <header class="site-header shell">
+    <a class="wordmark" href="/">MAXQUILL</a>
+    <nav class="owner-nav" aria-label="Owner">
+      <a class="quiet-link" href="/" aria-current="page">Library</a>
+      <a class="quiet-link" href="/reader.html">Owner Review</a>
+      <a class="quiet-link" href="/owner-feedback.html">Reader Feedback</a>
+    </nav>
+  </header>
+  <main class="shell page-main">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">Private reader preview</p>
+      <h1 id="page-title">Stories, kept close.</h1>
+      <p>MaxQuill is a quiet home for immersive, long-form fiction, designed for comfortable reading from the first chapter to the thousandth.</p>
+    </section>
+    <section class="owner-activity" aria-labelledby="activity-title">
+      <div class="section-heading">
+        <h2 id="activity-title">Needs Attention</h2>
+        <span id="activity-meta">Checking…</span>
+      </div>
+      <div id="owner-activity" aria-live="polite"><p class="loading">Checking review activity&hellip;</p></div>
+    </section>
+    <section class="library" aria-labelledby="library-title">
+      <div class="section-heading">
+        <h2 id="library-title">Your Library</h2>
+        <span>1 title</span>
+      </div>
+      <div id="library-content" aria-live="polite"><p class="loading">Opening your library&hellip;</p></div>
+    </section>
+  </main>
+  <footer class="site-footer shell">&copy; 2026 MaxQuill &middot; Private reader preview</footer>
+  <script src="review-api.js" defer></script>
+  <script src="reader-feedback-api.js" defer></script>
+  <script src="owner-activity.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

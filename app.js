@@ -7,11 +7,35 @@
   function action(book, saved) { const chapter = saved && book.chapters.find((item) => String(item.number) === saved.currentChapter); return { href: readerUrl(book, chapter || book.chapters[0]), label: chapter ? `Continue reading chapter ${chapter.number}` : "Start reading" }; }
   function cover() { return '<div class="cover" aria-label="Abstract placeholder cover"><div class="cover-mark" aria-hidden="true"><span>SA</span></div></div>'; }
   function library(book, saved) { const link = action(book, saved); document.querySelector("#library-content").innerHTML = `<article class="book-card">${cover()}<div class="card-content"><p class="status">${book.status}</p><h3>${book.title}</h3><p class="description">${book.description}</p><p class="metadata"><span>${book.chapters.length} chapters</span><span>${saved ? "Reading in progress" : "Not started"}</span></p><a class="primary-button" href="${link.href}">${link.label}</a><a class="quiet-link" href="book.html?book=${encodeURIComponent(book.id)}">View book details</a></div></article>`; }
+  function activityMeta(items) {
+    const open = window.MaxQuillOwnerActivity?.openCommentCount(items) || 0;
+    if (!items?.length) return "Nothing waiting";
+    return open ? `${open} open comment${open === 1 ? "" : "s"}` : `${items.length} item${items.length === 1 ? "" : "s"}`;
+  }
+  async function loadActivity(book) {
+    const root = document.querySelector("#owner-activity");
+    const meta = document.querySelector("#activity-meta");
+    if (!root || !window.MaxQuillOwnerActivity || !window.MaxQuillReaderFeedbackApi) return;
+    try {
+      const items = await MaxQuillOwnerActivity.loadHomepageActivity({
+        book,
+        chapterOverview: (bookId) => MaxQuillReaderFeedbackApi.chapterOverview(bookId),
+        chapterComments: (query) => MaxQuillReaderFeedbackApi.chapterComments(query),
+        localJobs: MaxQuillOwnerActivity.readLocalJobs()
+      });
+      root.innerHTML = MaxQuillOwnerActivity.render(items);
+      if (meta) meta.textContent = activityMeta(items);
+    } catch (error) {
+      console.warn("Owner activity could not be loaded.", error);
+      root.innerHTML = MaxQuillOwnerActivity.render([]);
+      if (meta) meta.textContent = "Nothing waiting";
+    }
+  }
   function bookPage(book, saved) {
     const link = action(book, saved), read = new Set(saved?.readChapters || []);
     const items = book.chapters.map((chapter) => { const current = saved?.currentChapter === String(chapter.number), isRead = read.has(String(chapter.number)), state = current ? "Current" : isRead ? "Read" : "Unread"; return `<li class="chapter-item${current ? " is-current" : ""}${isRead ? " is-read" : ""}"><a class="chapter-link" href="${readerUrl(book, chapter)}"${current ? ' aria-current="page"' : ""}><span class="chapter-number">Chapter ${chapter.number}</span><span class="chapter-title">${chapter.title}</span><span class="chapter-state">${state}</span></a></li>`; }).join("");
     document.title = `${book.title} | MaxQuill`; document.querySelector("#book-content").innerHTML = `<section class="book-hero" aria-labelledby="book-title">${cover()}<div class="book-copy"><p class="eyebrow">A MaxQuill technical demo</p><h1 id="book-title">${book.title}</h1><p class="description">${book.description}</p><p class="metadata"><span>${book.status}</span><span>${book.chapters.length} chapters</span><span>Updated ${book.lastUpdated}</span></p><a class="primary-button" href="${link.href}">${link.label}</a><a class="quiet-link" href="owner-feedback.html">Reader feedback</a></div></section><section class="chapter-section" aria-labelledby="chapters-title"><div class="section-heading"><h2 id="chapters-title">Chapters</h2><span>${book.chapters.length} available</span></div><ol class="chapter-list">${items}</ol></section>`;
   }
-  async function init() { try { const book = await loadBook(), saved = progress(); if (document.body.dataset.page === "library") library(book, saved); else bookPage(book, saved); } catch (error) { console.error("Could not load library.", error); document.querySelector("#library-content,#book-content").innerHTML = '<p class="error-message">The library could not be opened. Please refresh the page.</p>'; } }
+  async function init() { try { const book = await loadBook(), saved = progress(); if (document.body.dataset.page === "library") { library(book, saved); await loadActivity(book); } else bookPage(book, saved); } catch (error) { console.error("Could not load library.", error); document.querySelector("#library-content,#book-content").innerHTML = '<p class="error-message">The library could not be opened. Please refresh the page.</p>'; } }
   init();
 })();
