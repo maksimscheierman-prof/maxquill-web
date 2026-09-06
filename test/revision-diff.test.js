@@ -295,6 +295,8 @@ test("CH001 Lyra continuity note groups multiple adjacent hunks into one card", 
   assert.match(ownerCards[0].before.text, /Lyra, on the far side of the room/);
   assert.ok(ownerCards[0].before.passages.some((passage) => !passage.changed), "old block includes neighbor context");
   assert.ok(ownerCards[0].after.passages.some((passage) => !passage.changed), "new block includes neighbor context");
+  assert.ok(ownerCards[0].after.passages.some((passage) => passage.changed && (passage.role === "inserted" || passage.role === "changed")));
+  assert.ok(ownerCards[0].before.passages.some((passage) => passage.changed && (passage.role === "changed" || passage.role === "removed")));
   const ranges = revision.ownerSelectedRanges(ownerCards[0].before.text, ownerCards[0].ownerReviews);
   assert.equal(ranges.length, 1);
   assert.equal(ownerCards[0].before.text.slice(ranges[0].start, ranges[0].end), lyraQuote);
@@ -352,6 +354,29 @@ test("true standalone deletion still works after rewrite grouping", () => {
   assert.equal(changes[0].kind, "removed");
   assert.equal(changes[0].after, null);
   assert.equal(changes[0].before.text, "Drop this sentence.");
+});
+
+test("grouped passages mark replaced vs removed roles for prose coloring", () => {
+  const before = pkg(1, [
+    paragraph("p001", "Keep."),
+    paragraph("p002", "Replace me entirely."),
+    paragraph("p003", "Delete me with no replacement."),
+    paragraph("p004", "Keep too.")
+  ]);
+  const after = pkg(2, [
+    paragraph("p001", "Keep."),
+    paragraph("p002", "Brand new replacement paragraph."),
+    paragraph("p003", "Keep too.")
+  ]);
+  const model = diff.buildRevisionReviewModel(before, after, { annotations: [note("ann-r", "p002", "Replace me entirely.", "Rewrite this.", "wording")] });
+  const card = model.changes.find((change) => change.id === "owner:ann-r");
+  assert.ok(card);
+  const replaced = card.before.passages.find((passage) => passage.text === "Replace me entirely.");
+  assert.equal(replaced.role, "changed");
+  const removed = card.before.passages.find((passage) => passage.text === "Delete me with no replacement.");
+  if (removed) assert.equal(removed.role, "removed");
+  const inserted = card.after.passages.find((passage) => passage.text === "Brand new replacement paragraph.");
+  assert.ok(inserted.role === "changed" || inserted.role === "inserted");
 });
 
 test("Changes view shows Before/After for a chapter title change", () => {

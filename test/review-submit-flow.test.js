@@ -92,17 +92,36 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(script, /origin === "owner_requested" \? "Revision"/);
   assert.match(script, /appendSide\(pair, "New Version"/);
   assert.match(script, /appendSide\(pair, "Old Version"/);
+  assert.match(script, /revision-prose/);
+  assert.match(script, /revision-text-changed/);
+  assert.match(script, /revision-text-removed/);
   assert.match(script, /revision-owner-anchor/);
   assert.match(script, /revision-kind-badge/);
-  assert.match(script, /revision-passage-block/);
+  assert.match(script, /revision-legend/);
+  assert.doesNotMatch(script, /revision-passage-block/);
   assert.doesNotMatch(script, /Change \$\{index \+ 1\} ·/);
   assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:1fr 1fr/);
   assert.match(css, /@media\(max-width:48rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
   assert.match(css, /\.revision-owner-note\{/);
   assert.match(css, /\.revision-owner-anchor\{/);
-  assert.match(css, /\.revision-passage-block\{/);
+  assert.match(css, /\.revision-prose\{/);
+  assert.match(css, /\.revision-prose-p\{[^}]*border:\s*0/);
+  assert.match(css, /\.revision-text-changed\{[^}]*color:var\(--revision-changed\)/);
+  assert.match(css, /\.revision-text-removed\{[^}]*color:var\(--revision-removed\)/);
+  assert.doesNotMatch(css, /\.revision-passage\{[^}]*border:1px solid/);
+  assert.doesNotMatch(css, /\.revision-passage-block\{/);
 });
 
+test("revision continuous prose uses accent for changed and red for removed without paragraph tiles", () => {
+  const css = fs.readFileSync(require.resolve("../styles.css"), "utf8");
+  const script = fs.readFileSync(require.resolve("../reader.js"), "utf8");
+  assert.match(css, /\.revision-prose-p\{margin:0 0 1\.15em;padding:0;border:0;background:transparent/);
+  assert.match(css, /\.revision-prose-p\.is-context/);
+  assert.match(script, /data-passage-role/);
+  assert.match(script, /data-diff/);
+  assert.match(script, /revision-prose/);
+  assert.doesNotMatch(script, /revision-passage\$\{/);
+});
 test("revision comparison layout prefers New left / Old right with stacked mobile order", () => {
   const layout = require("../revision-review.js").revisionComparisonLayout();
   assert.deepEqual(layout.desktopColumns, ["new", "old"]);

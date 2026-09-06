@@ -323,7 +323,7 @@
     return indexes;
   }
 
-  function buildPassageList(content, indexes, touched, roleFor) {
+  function buildPassageList(content, indexes, touched, roleForIndex) {
     return indexes.map((index) => {
       const paragraph = content[index];
       const changed = touched.has(index);
@@ -331,7 +331,7 @@
         id: paragraph.id,
         text: paragraph.text,
         index,
-        role: changed ? roleFor : "context",
+        role: changed ? roleForIndex(index) : "context",
         changed
       };
     });
@@ -353,14 +353,25 @@
   function makeGroupedChange({ id, origin, ownerReviews, hunks, beforeContent, afterContent }) {
     const beforeTouched = new Set();
     const afterTouched = new Set();
+    const beforeRoles = new Map();
+    const afterRoles = new Map();
     for (const hunk of hunks) {
-      if (Number.isInteger(hunk.before?.index)) beforeTouched.add(hunk.before.index);
-      if (Number.isInteger(hunk.after?.index)) afterTouched.add(hunk.after.index);
+      if (Number.isInteger(hunk.before?.index)) {
+        beforeTouched.add(hunk.before.index);
+        const role = Number.isInteger(hunk.after?.index) || hunk.kind === "changed" || hunk.kind === "moved" ? "changed" : "removed";
+        const existing = beforeRoles.get(hunk.before.index);
+        if (existing !== "changed") beforeRoles.set(hunk.before.index, role);
+      }
+      if (Number.isInteger(hunk.after?.index)) {
+        afterTouched.add(hunk.after.index);
+        const role = Number.isInteger(hunk.before?.index) || hunk.kind === "changed" || hunk.kind === "moved" ? "changed" : "inserted";
+        if (!afterRoles.has(hunk.after.index) || role === "changed") afterRoles.set(hunk.after.index, role);
+      }
     }
     const beforeIndexes = collectBlockIndexes(beforeContent, [...beforeTouched]);
     const afterIndexes = collectBlockIndexes(afterContent, [...afterTouched]);
-    const beforePassages = buildPassageList(beforeContent, beforeIndexes, beforeTouched, "removed");
-    const afterPassages = buildPassageList(afterContent, afterIndexes, afterTouched, "inserted");
+    const beforePassages = buildPassageList(beforeContent, beforeIndexes, beforeTouched, (index) => beforeRoles.get(index) || "removed");
+    const afterPassages = buildPassageList(afterContent, afterIndexes, afterTouched, (index) => afterRoles.get(index) || "inserted");
     const beforeText = joinPassages(beforePassages);
     const afterText = joinPassages(afterPassages);
     const firstBefore = beforePassages.find((passage) => passage.changed) || beforePassages[0] || null;
