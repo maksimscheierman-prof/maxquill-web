@@ -116,6 +116,7 @@
 
   function pairGap(before, after, beforeIndexes, afterIndexes) {
     const usedAfter = new Set();
+    const usedBefore = new Set();
     const ops = [];
     for (const beforeIndex of beforeIndexes) {
       let best = -1, bestScore = SIMILARITY_THRESHOLD;
@@ -126,12 +127,22 @@
       });
       if (best >= 0) {
         usedAfter.add(best);
+        usedBefore.add(beforeIndex);
         ops.push({ kind: "changed", beforeIndex, afterIndex: afterIndexes[best] });
-      } else ops.push({ kind: "removed", beforeIndex, afterIndex: null });
+      }
     }
-    afterIndexes.forEach((afterIndex, position) => {
-      if (!usedAfter.has(position)) ops.push({ kind: "inserted", beforeIndex: null, afterIndex });
-    });
+    const remainingBefore = beforeIndexes.filter((index) => !usedBefore.has(index));
+    const remainingAfter = afterIndexes.filter((_, position) => !usedAfter.has(position));
+    const rewriteCount = Math.min(remainingBefore.length, remainingAfter.length);
+    for (let index = 0; index < rewriteCount; index += 1) {
+      ops.push({ kind: "changed", beforeIndex: remainingBefore[index], afterIndex: remainingAfter[index] });
+    }
+    for (let index = rewriteCount; index < remainingBefore.length; index += 1) {
+      ops.push({ kind: "removed", beforeIndex: remainingBefore[index], afterIndex: null });
+    }
+    for (let index = rewriteCount; index < remainingAfter.length; index += 1) {
+      ops.push({ kind: "inserted", beforeIndex: null, afterIndex: remainingAfter[index] });
+    }
     return ops;
   }
 

@@ -86,4 +86,23 @@ test("reader exposes revision tabs, Review Notes labeling, and full-chapter fall
   assert.match(css, /\.review-tabs\{/);
   assert.match(css, /\.revision-change\{/);
   assert.match(css, /\.chapter-title-review\{/);
+  assert.match(script, /"New Version"/);
+  assert.match(script, /"Old Version"/);
+  assert.match(script, /"Owner Review Note"/);
+  assert.match(script, /appendSide\(pair, "New Version"/);
+  assert.match(script, /appendSide\(pair, "Old Version"/);
+  assert.match(script, /revision-owner-anchor/);
+  assert.match(script, /revision-kind-badge/);
+  assert.doesNotMatch(script, /Change \$\{index \+ 1\} ·/);
+  assert.match(css, /\.revision-pair\{display:grid;grid-template-columns:1fr 1fr/);
+  assert.match(css, /@media\(max-width:48rem\)\{[\s\S]*?\.revision-pair\{grid-template-columns:1fr\}/);
+  assert.match(css, /\.revision-owner-note\{/);
+  assert.match(css, /\.revision-owner-anchor\{/);
+});
+
+test("revision comparison layout prefers New left / Old right with stacked mobile order", () => {
+  const layout = require("../revision-review.js").revisionComparisonLayout();
+  assert.deepEqual(layout.desktopColumns, ["new", "old"]);
+  assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
+  assert.equal(layout.kindBadgeSecondary, true);
 });

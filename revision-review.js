@@ -219,6 +219,29 @@
     };
   }
 
+  function ownerSelectedRanges(text, reviews) {
+    const ranges = [];
+    for (const note of reviews || []) {
+      if (!note?.selectedText || !text) continue;
+      if (Number.isInteger(note.selectionStart) && Number.isInteger(note.selectionEnd) && note.selectionEnd > note.selectionStart && text.slice(note.selectionStart, note.selectionEnd) === note.selectedText) {
+        ranges.push({ start: note.selectionStart, end: note.selectionEnd });
+        continue;
+      }
+      const index = text.indexOf(note.selectedText);
+      if (index >= 0) ranges.push({ start: index, end: index + note.selectedText.length });
+    }
+    return ranges.sort((left, right) => left.start - right.start).filter((range, index, all) => !all[index - 1] || range.start >= all[index - 1].end);
+  }
+
+  function revisionComparisonLayout() {
+    return {
+      desktopColumns: ["new", "old"],
+      mobileStack: ["new", "old", "ownerNote"],
+      labels: { new: "New Version", old: "Old Version", ownerNote: "Owner Review Note" },
+      kindBadgeSecondary: true
+    };
+  }
+
   return {
     cloneReviewReady,
     cloneOwnerReview,
@@ -239,6 +262,8 @@
     toggleAccepted,
     acceptAll,
     revisionViewState,
-    ownerReviewFromLocal
+    ownerReviewFromLocal,
+    ownerSelectedRanges,
+    revisionComparisonLayout
   };
 });

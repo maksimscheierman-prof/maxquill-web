@@ -101,28 +101,72 @@
   }
   function kindLabel(kind) { return { changed: "Changed", removed: "Removed", inserted: "Inserted", moved: "Moved", unchanged: "Unchanged", title: "Chapter title", title_unchanged: "Chapter title" }[kind] || kind; }
   function originLabel(origin) { return origin === "owner_requested" ? "Owner-requested change" : "Additional revision change"; }
-  function appendSide(parent, label, passage, context, tokens, keep, paragraphId) {
-    const side = node("div", "revision-side");
-    side.append(node("span", "", label));
-    if (context?.previous) side.append(node("p", "revision-context", `[…] ${context.previous}`));
-    if (!passage) side.append(node("p", "revision-empty", label === "After" ? "[removed]" : "[none]"));
+  function appendMarkedText(target, text, ranges, className) {
+    let cursor = 0;
+    for (const range of ranges) {
+      if (range.start > cursor) target.append(document.createTextNode(text.slice(cursor, range.start)));
+      const mark = node("span", className, text.slice(range.start, range.end));
+      target.append(mark);
+      cursor = range.end;
+    }
+    if (cursor < text.length) target.append(document.createTextNode(text.slice(cursor)));
+  }
+  function appendSide(parent, label, passage, context, tokens, keep, paragraphId, ownerReviews) {
+    const side = node("div", `revision-side revision-side-${label === "New Version" ? "new" : "old"}`);
+    side.append(node("span", "revision-side-label", label));
+    const showContext = Boolean(context?.previous || context?.next) && passage && passage.text.length > 420;
+    if (showContext && context?.previous) side.append(node("p", "revision-context", `[…] ${context.previous}`));
+    if (!passage) side.append(node("p", "revision-empty", "[none]"));
     else {
       const body = node("p", "revision-passage");
       if (paragraphId) { body.id = `paragraph-${paragraphId}`; body.dataset.paragraphId = paragraphId; }
-      renderPassage(body, passage.text, tokens, keep);
+      const ownerRanges = label === "Old Version" ? MaxQuillRevisionReview.ownerSelectedRanges(passage.text, ownerReviews) : [];
+      if (ownerRanges.length) appendMarkedText(body, passage.text, ownerRanges, "revision-owner-anchor");
+      else renderPassage(body, passage.text, tokens, keep);
       side.append(body);
     }
-    if (context?.next) side.append(node("p", "revision-context", `${context.next} […]`));
+    if (showContext && context?.next) side.append(node("p", "revision-context", `${context.next} […]`));
     parent.append(side);
   }
   function appendOwnerReviews(card, reviews) {
-    for (const note of reviews || []) {
+    if (!reviews?.length) return;
+    const section = node("div", "revision-owner-note");
+    section.append(node("p", "revision-side-label", "Owner Review Note"));
+    for (const note of reviews) {
       const block = node("div", "revision-review");
-      block.append(node("p", "", `Original review · ${note.category}`));
-      const quote = document.createElement("q"); quote.textContent = note.selectedText; block.append(quote);
-      const comment = document.createElement("blockquote"); comment.textContent = note.comment; block.append(comment);
-      card.append(block);
+      block.append(node("p", "revision-note-category", note.category || "other"));
+      if (note.selectedText) {
+        const quote = document.createElement("q");
+        quote.className = "revision-note-quote";
+        quote.textContent = note.selectedText;
+        block.append(quote);
+      }
+      const comment = document.createElement("blockquote");
+      comment.className = "revision-note-comment";
+      comment.textContent = note.comment;
+      block.append(comment);
+      section.append(block);
     }
+    card.append(section);
+  }
+  function appendChangeCard(body, change, options = {}) {
+    const card = node("article", `revision-change${change.kind === "title" ? " revision-title" : ""}${change.accepted ? " is-accepted" : ""}`);
+    card.dataset.changeId = change.id;
+    const header = node("div", "revision-change-header");
+    header.append(node("p", "revision-kicker", options.title || "Revision"));
+    header.append(node("span", "revision-kind-badge", kindLabel(change.kind)));
+    card.append(header);
+    card.append(node("p", "revision-origin", originLabel(change.origin)));
+    const pair = node("div", "revision-pair");
+    appendSide(pair, "New Version", change.after, change.afterContext, change.inline, "inserted", change.after?.id || null, null);
+    appendSide(pair, "Old Version", change.before, change.beforeContext, change.inline, "removed", null, change.ownerReviews);
+    card.append(pair);
+    appendOwnerReviews(card, change.ownerReviews);
+    const actions = node("div", "revision-actions");
+    const accept = node("button", change.accepted ? "is-accepted" : "", change.accepted ? "Accepted" : "Accept"); accept.type = "button"; accept.dataset.changeAction = "accept"; accept.addEventListener("click", () => acceptChange(change.id));
+    const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(change));
+    const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(change, "other", "Flagged for revision."));
+    actions.append(accept, comment, flag); card.append(actions); body.append(card);
   }
   function changeParagraph(change) {
     if (change.after?.id) return sourcePackage.content.find((item) => item.id === change.after.id) || null;
@@ -168,49 +212,24 @@
       body.append(node("p", "revision-empty", "No detectable text changes. View the full chapter to read the revised version."));
       return;
     }
-    if (model.titleChange) {
-      const change = model.titleChange;
-      const card = node("article", `revision-change revision-title${change.accepted ? " is-accepted" : ""}`);
-      card.dataset.changeId = change.id;
-      card.append(node("p", "revision-kicker", "Chapter title"));
-      card.append(node("p", "revision-origin", originLabel(change.origin)));
-      appendOwnerReviews(card, change.ownerReviews);
-      const pair = node("div", "revision-pair");
-      appendSide(pair, "Before", change.before, null, change.inline, "removed", null);
-      appendSide(pair, "After", change.after, null, change.inline, "inserted", null);
-      card.append(pair);
-      const actions = node("div", "revision-actions");
-      const accept = node("button", change.accepted ? "is-accepted" : "", change.accepted ? "Accepted" : "Accept"); accept.type = "button"; accept.dataset.changeAction = "accept"; accept.addEventListener("click", () => acceptChange(change.id));
-      const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(change));
-      const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(change, "other", "Flagged for revision."));
-      actions.append(accept, comment, flag); card.append(actions); body.append(card);
-    }
-    model.changes.forEach((change, index) => {
-      const card = node("article", `revision-change${change.accepted ? " is-accepted" : ""}`);
-      card.dataset.changeId = change.id;
-      card.append(node("p", "revision-kicker", `Change ${index + 1} · ${kindLabel(change.kind)}`));
-      card.append(node("p", "revision-origin", originLabel(change.origin)));
-      appendOwnerReviews(card, change.ownerReviews);
-      const pair = node("div", "revision-pair");
-      appendSide(pair, "Before", change.before, change.beforeContext, change.inline, "removed", null);
-      appendSide(pair, "After", change.after, change.afterContext, change.inline, "inserted", change.after?.id || null);
-      card.append(pair);
-      const actions = node("div", "revision-actions");
-      const accept = node("button", change.accepted ? "is-accepted" : "", change.accepted ? "Accepted" : "Accept"); accept.type = "button"; accept.dataset.changeAction = "accept"; accept.addEventListener("click", () => acceptChange(change.id));
-      const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(change));
-      const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(change, "other", "Flagged for revision."));
-      actions.append(accept, comment, flag); card.append(actions); body.append(card);
-    });
+    if (model.titleChange) appendChangeCard(body, model.titleChange, { title: "Chapter title" });
+    model.changes.forEach((change) => appendChangeCard(body, change));
     model.unmatchedReviewItems.forEach((item, index) => {
       const card = node("article", "revision-change");
       const titleItem = item.kind === "title_unchanged" || item.annotation?.target === "chapter_title";
-      card.append(node("p", "revision-kicker", titleItem ? "Chapter title" : `Review item ${index + 1}`));
+      const header = node("div", "revision-change-header");
+      header.append(node("p", "revision-kicker", titleItem ? "Chapter title" : "Owner Review Note"));
+      header.append(node("span", "revision-kind-badge", "No text change"));
+      card.append(header);
       card.append(node("p", "revision-alert", "Review item produced no detectable text change"));
+      if (item.after || item.before) {
+        const pair = node("div", "revision-pair");
+        appendSide(pair, "New Version", item.after, null, null, null, item.after?.id || null, null);
+        appendSide(pair, "Old Version", item.before || item.after, null, null, null, null, item.annotation ? [item.annotation] : []);
+        card.append(pair);
+      }
       appendOwnerReviews(card, item.annotation ? [item.annotation] : []);
       if (item.after) {
-        const pair = node("div", "revision-pair");
-        appendSide(pair, titleItem ? "Current title" : "Current text", item.after, null, null, null, item.after.id);
-        card.append(pair);
         const actions = node("div", "revision-actions");
         const comment = node("button", "", "Comment"); comment.type = "button"; comment.addEventListener("click", () => commentOnChange(item));
         const flag = node("button", "", "Flag"); flag.type = "button"; flag.addEventListener("click", () => commentOnChange(item, "other", "Flagged for revision."));

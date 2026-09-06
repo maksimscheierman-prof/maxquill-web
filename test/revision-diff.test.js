@@ -191,6 +191,73 @@ test("accept tracking is local session state and does not alter the model ids", 
   assert.equal(model.changes[0].accepted, false);
 });
 
+test("adjacent remove+insert rewrite groups into one changed card", () => {
+  const oldParagraph = "This implies Lyra sleeps in the same room as Kael and Tarin, which softens the danger too early.";
+  const newParagraph = "The door opened without warning. Lyra stayed where she was and watched the threshold.";
+  const changes = diff.diffParagraphs(
+    [paragraph("p001", "Stable open."), paragraph("p002", oldParagraph), paragraph("p003", "Stable close.")],
+    [paragraph("p001", "Stable open."), paragraph("p002", newParagraph), paragraph("p003", "Stable close.")]
+  );
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].kind, "changed");
+  assert.equal(changes[0].before.text, oldParagraph);
+  assert.equal(changes[0].after.text, newParagraph);
+  assert.ok(changes[0].inline?.length);
+});
+
+test("grouped rewrite keeps full old and new paragraphs for review", () => {
+  const before = pkg(1, [
+    paragraph("p001", "Keep me."),
+    paragraph("p002", "Continuity leak: shared sleep chamber."),
+    paragraph("p003", "Keep too.")
+  ]);
+  const after = pkg(2, [
+    paragraph("p001", "Keep me."),
+    paragraph("p002", "The door opened without warning."),
+    paragraph("p003", "Keep too.")
+  ]);
+  const ownerReview = {
+    annotations: [note("ann-1", "p002", "shared sleep chamber", "This implies Lyra sleeps in the same room as Kael and Tarin.", "continuity")]
+  };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  assert.equal(model.changes.length, 1);
+  assert.equal(model.changes[0].kind, "changed");
+  assert.equal(model.changes[0].before.text, "Continuity leak: shared sleep chamber.");
+  assert.equal(model.changes[0].after.text, "The door opened without warning.");
+  assert.equal(model.changes[0].ownerReviews[0].category, "continuity");
+  assert.equal(model.changes[0].ownerReviews[0].comment, "This implies Lyra sleeps in the same room as Kael and Tarin.");
+  const ranges = revision.ownerSelectedRanges(model.changes[0].before.text, model.changes[0].ownerReviews);
+  assert.deepEqual(ranges, [{ start: "Continuity leak: ".length, end: "Continuity leak: shared sleep chamber".length }]);
+  const layout = revision.revisionComparisonLayout();
+  assert.deepEqual(layout.desktopColumns, ["new", "old"]);
+  assert.deepEqual(layout.mobileStack, ["new", "old", "ownerNote"]);
+  assert.equal(layout.labels.new, "New Version");
+  assert.equal(layout.labels.old, "Old Version");
+  assert.equal(layout.labels.ownerNote, "Owner Review Note");
+});
+
+test("true standalone insertion still works after rewrite grouping", () => {
+  const changes = diff.diffParagraphs(
+    [paragraph("p001", "Keep."), paragraph("p002", "Keep too.")],
+    [paragraph("p001", "Keep."), paragraph("p002", "A new beat arrives."), paragraph("p003", "Keep too.")]
+  );
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].kind, "inserted");
+  assert.equal(changes[0].before, null);
+  assert.equal(changes[0].after.text, "A new beat arrives.");
+});
+
+test("true standalone deletion still works after rewrite grouping", () => {
+  const changes = diff.diffParagraphs(
+    [paragraph("p001", "Keep."), paragraph("p002", "Drop this sentence."), paragraph("p003", "Keep too.")],
+    [paragraph("p001", "Keep."), paragraph("p002", "Keep too.")]
+  );
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].kind, "removed");
+  assert.equal(changes[0].after, null);
+  assert.equal(changes[0].before.text, "Drop this sentence.");
+});
+
 test("Changes view shows Before/After for a chapter title change", () => {
   const before = pkg(1, [paragraph("p001", "Same body.")], "The Old Storyteller");
   const after = pkg(2, [paragraph("p001", "Same body.")], "The Named Door");
