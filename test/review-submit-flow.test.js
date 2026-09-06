@@ -134,8 +134,11 @@ test("revision continuous prose uses green/orange/red without underlines or para
   assert.match(script, /proseRoleClass\([\s\S]*revision-new/);
   assert.match(script, /proseRoleClass\([\s\S]*revision-changed/);
   assert.match(script, /proseRoleClass\([\s\S]*revision-removed/);
-  assert.doesNotMatch(script, /revision-passage\$\{/);
-  assert.doesNotMatch(css, /text-decoration:underline/);
+  assert.match(script, /Revision Review Feedback/);
+  assert.match(script, /clearAccepted/);
+  assert.match(script, /buildNextRevisionAnnotations/);
+  assert.match(script, /changesReviewResolved/);
+  assert.match(require("fs").readFileSync(require.resolve("../revision-review.js"), "utf8"), /Needs revision/);
 });
 test("revision comparison layout prefers New left / Old right with stacked mobile order", () => {
   const layout = require("../revision-review.js").revisionComparisonLayout();

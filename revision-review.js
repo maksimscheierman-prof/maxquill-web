@@ -139,20 +139,83 @@
     };
   }
 
-  function applyAccepted(model, acceptedChangeIds) {
+  function applyAccepted(model, acceptedChangeIds, revisionAnnotations = []) {
     const accepted = new Set(acceptedChangeIds || []);
-    const changes = (model?.changes || []).map((change) => ({ ...change, accepted: accepted.has(change.id) }));
-    const titleChange = model?.titleChange ? { ...model.titleChange, accepted: accepted.has(model.titleChange.id) } : null;
+    const enrich = (change) => {
+      if (!change) return null;
+      const feedback = feedbackForChange(revisionAnnotations, change.id);
+      const decision = cardDecision({ accepted: accepted.has(change.id) && !feedback.length, feedbackNotes: feedback });
+      return { ...change, accepted: decision.accepted, decision, revisionFeedback: feedback };
+    };
+    const changes = (model?.changes || []).map((change) => enrich(change));
+    const titleChange = enrich(model?.titleChange);
+    const unmatchedReviewItems = (model?.unmatchedReviewItems || []).map((item) => {
+      const feedback = feedbackForChange(revisionAnnotations, item.id);
+      const decision = cardDecision({ accepted: accepted.has(item.id) && !feedback.length, feedbackNotes: feedback });
+      return { ...item, accepted: decision.accepted, decision, revisionFeedback: feedback };
+    });
     return {
       ...model,
       titleChange,
       changes,
-      unmatchedReviewItems: model?.unmatchedReviewItems || [],
+      unmatchedReviewItems,
       summary: {
         ...(model?.summary || {}),
-        accepted: changes.filter((change) => change.accepted).length + (titleChange?.accepted ? 1 : 0)
+        accepted: changes.filter((change) => change.accepted).length + (titleChange?.accepted ? 1 : 0) + unmatchedReviewItems.filter((item) => item.accepted).length,
+        needsRevision: [...changes, ...(titleChange ? [titleChange] : []), ...unmatchedReviewItems].filter((change) => change.decision?.state === "needs_revision" || change.decision?.state === "flagged").length,
+        unresolved: [...changes, ...(titleChange ? [titleChange] : []), ...unmatchedReviewItems].filter((change) => change.decision?.state === "unresolved").length
       }
     };
+  }
+
+  function feedbackForChange(annotations, changeId) {
+    return (annotations || []).filter((note) => note?.revisionChangeId === changeId && note.status === "open");
+  }
+
+  function cardDecision({ accepted = false, feedbackNotes = [] } = {}) {
+    const openFeedback = (feedbackNotes || []).filter((note) => note?.status === "open");
+    if (openFeedback.length) {
+      const flagged = openFeedback.some((note) => note.revisionFeedbackKind === "flag");
+      return {
+        state: flagged ? "flagged" : "needs_revision",
+        label: flagged ? "Flagged" : "Needs revision",
+        accepted: false,
+        canAccept: false,
+        showAccept: false,
+        showUndoAccept: false,
+        feedbackNotes: openFeedback
+      };
+    }
+    if (accepted) {
+      return {
+        state: "accepted",
+        label: "Accepted",
+        accepted: true,
+        canAccept: true,
+        showAccept: false,
+        showUndoAccept: true,
+        feedbackNotes: []
+      };
+    }
+    return {
+      state: "unresolved",
+      label: "Unresolved",
+      accepted: false,
+      canAccept: true,
+      showAccept: true,
+      showUndoAccept: false,
+      feedbackNotes: []
+    };
+  }
+
+  function clearAccepted(session, changeId) {
+    return { ...session, acceptedChangeIds: (session.acceptedChangeIds || []).filter((id) => id !== changeId) };
+  }
+
+  function setAccepted(session, changeId, accepted) {
+    const ids = new Set(session.acceptedChangeIds || []);
+    if (accepted) ids.add(changeId); else ids.delete(changeId);
+    return { ...session, acceptedChangeIds: [...ids] };
   }
 
   function toggleAccepted(session, changeId) {
@@ -163,6 +226,73 @@
 
   function acceptAll(session, changeIds) {
     return { ...session, acceptedChangeIds: [...new Set(changeIds.filter(Boolean))] };
+  }
+
+  function unresolvedRevisionFeedback(annotations) {
+    return (annotations || []).filter((note) => typeof note?.revisionChangeId === "string" && note.revisionChangeId && note.status === "open");
+  }
+
+  function logicalReviewCards(model) {
+    return [
+      ...(model?.titleChange ? [model.titleChange] : []),
+      ...(model?.changes || []),
+      ...(model?.unmatchedReviewItems || []).map((item) => ({ ...item, id: item.id }))
+    ];
+  }
+
+  function changesReviewResolved(model, session, revisionAnnotations = []) {
+    const accepted = new Set(session?.acceptedChangeIds || []);
+    for (const card of logicalReviewCards(model)) {
+      if (!card?.id) continue;
+      if (card.kind === "unchanged" || card.kind === "unmapped" || card.kind === "title_unchanged") {
+        const feedback = feedbackForChange(revisionAnnotations, card.id);
+        if (!feedback.length) return false;
+        continue;
+      }
+      const decision = cardDecision({
+        accepted: accepted.has(card.id),
+        feedbackNotes: feedbackForChange(revisionAnnotations, card.id)
+      });
+      if (decision.state === "unresolved") return false;
+    }
+    return true;
+  }
+
+  function acceptAllEligibleIds(model, revisionAnnotations = []) {
+    const ids = [];
+    for (const card of [...(model?.titleChange ? [model.titleChange] : []), ...(model?.changes || []), ...(model?.unmatchedReviewItems || [])]) {
+      const feedback = feedbackForChange(revisionAnnotations, card.id);
+      if (!feedback.length) ids.push(card.id);
+    }
+    return ids;
+  }
+
+  function buildNextRevisionAnnotations(annotations) {
+    return unresolvedRevisionFeedback(annotations).map((note) => {
+      const next = {
+        id: note.id,
+        paragraphId: note.paragraphId,
+        selectedText: note.selectedText,
+        selectionStart: note.selectionStart,
+        selectionEnd: note.selectionEnd,
+        category: note.category,
+        comment: note.comment,
+        status: note.status,
+        requiresCanonChange: note.requiresCanonChange
+      };
+      if (note.target === "chapter_title") {
+        return {
+          id: note.id,
+          target: "chapter_title",
+          selectedText: note.selectedText,
+          category: note.category,
+          comment: note.comment,
+          status: note.status,
+          requiresCanonChange: note.requiresCanonChange
+        };
+      }
+      return next;
+    });
   }
 
   function revisionViewState({
@@ -259,8 +389,17 @@
     originalNoteCount,
     revisionDisplayState,
     applyAccepted,
+    feedbackForChange,
+    cardDecision,
+    clearAccepted,
+    setAccepted,
     toggleAccepted,
     acceptAll,
+    unresolvedRevisionFeedback,
+    logicalReviewCards,
+    changesReviewResolved,
+    acceptAllEligibleIds,
+    buildNextRevisionAnnotations,
     revisionViewState,
     ownerReviewFromLocal,
     ownerSelectedRanges,

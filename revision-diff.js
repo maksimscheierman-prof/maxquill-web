@@ -244,13 +244,25 @@
       if (anchorIndex >= 0 && change.before?.index === anchorIndex) seeds.push(change);
     }
     if (seeds.length || anchorIndex < 0) return [...new Set(seeds)];
-    // Anchor paragraph vanished into a local rewrite gap: seed from nearest changed neighbors.
-    const nearby = changes.filter((change) => {
-      const indexes = changeIndexes(change);
-      return (indexes.before != null && Math.abs(indexes.before - anchorIndex) <= 2)
-        || (indexes.after != null && Math.abs(indexes.after - anchorIndex) <= 3);
+    return [];
+  }
+
+  function preferSeedOwner(change, annotationIds, notes, before) {
+    if (annotationIds.length === 1) return annotationIds[0];
+    const byParagraph = annotationIds.find((id) => {
+      const note = notes.find((item) => item.id === id);
+      return note?.paragraphId && change.before?.id === note.paragraphId;
     });
-    return nearby;
+    if (byParagraph) return byParagraph;
+    const ranked = [...annotationIds].sort((leftId, rightId) => {
+      const left = notes.find((item) => item.id === leftId);
+      const right = notes.find((item) => item.id === rightId);
+      const leftIndex = before.findIndex((paragraph) => paragraph.id === left?.paragraphId);
+      const rightIndex = before.findIndex((paragraph) => paragraph.id === right?.paragraphId);
+      const changeIndex = change.before?.index ?? change.after?.index ?? 0;
+      return Math.abs(leftIndex - changeIndex) - Math.abs(rightIndex - changeIndex);
+    });
+    return ranked[0];
   }
 
   function pathClear(from, to, stableIndexes) {
@@ -262,16 +274,6 @@
 
   function changeReachableWithoutStableGap(change, bounds, stableBefore, stableAfter) {
     const indexes = changeIndexes(change);
-    if (indexes.before != null && bounds.minBefore != null) {
-      const edge = indexes.before < bounds.minBefore ? bounds.minBefore : bounds.maxBefore;
-      if (!pathClear(edge, indexes.before, stableBefore) && !(indexes.before >= bounds.minBefore && indexes.before <= bounds.maxBefore)) return false;
-    } else if (indexes.before != null && bounds.minBefore == null) {
-      /* insert-only cluster may still attach via after-side */
-    }
-    if (indexes.after != null && bounds.minAfter != null) {
-      const edge = indexes.after < bounds.minAfter ? bounds.minAfter : bounds.maxAfter;
-      if (!pathClear(edge, indexes.after, stableAfter) && !(indexes.after >= bounds.minAfter && indexes.after <= bounds.maxAfter)) return false;
-    }
     if (indexes.before == null && indexes.after == null) return false;
     if (bounds.minBefore == null && bounds.minAfter == null) return true;
     if (indexes.before != null && bounds.minBefore != null) {
@@ -283,7 +285,7 @@
     return false;
   }
 
-  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignAnchors = new Set(), stableBefore = new Set(), stableAfter = new Set()) {
+  function expandOwnerCluster(seedChanges, allChanges, claimed, foreignSeedIds, stableBefore = new Set(), stableAfter = new Set()) {
     const cluster = [...seedChanges];
     const clusterIds = new Set(cluster.map((change) => change.id));
     let grew = true;
@@ -293,7 +295,7 @@
       if (spanTooLarge(bounds)) break;
       for (const change of allChanges) {
         if (clusterIds.has(change.id) || claimed.has(change.id)) continue;
-        if (change.before?.id && foreignAnchors.has(change.before.id)) continue;
+        if (foreignSeedIds.has(change.id)) continue;
         if (!changeTouchesBounds(change, bounds, 1)) continue;
         if (!changeReachableWithoutStableGap(change, bounds, stableBefore, stableAfter)) continue;
         const next = [...cluster, change];
@@ -350,7 +352,7 @@
     return "changed";
   }
 
-  function makeGroupedChange({ id, origin, ownerReviews, hunks, beforeContent, afterContent }) {
+  function makeGroupedChange({ id, origin, ownerReviews, hunks, beforeContent, afterContent, sourceOwnerNoteId = null }) {
     const beforeTouched = new Set();
     const afterTouched = new Set();
     const beforeRoles = new Map();
@@ -381,6 +383,7 @@
       kind: dominantKind(hunks),
       origin,
       ownerReviews: ownerReviews || [],
+      sourceOwnerNoteId,
       hunks: hunks.map((hunk) => ({ id: hunk.id, kind: hunk.kind, before: hunk.before, after: hunk.after })),
       memberIds: hunks.map((hunk) => hunk.id),
       before: beforePassages.length ? { id: firstBefore?.id || null, text: beforeText, index: beforeIndexes[0] ?? null, passages: beforePassages } : null,
@@ -435,23 +438,38 @@
 
     const exactBeforeIndexes = new Set(exactPairs.map((pair) => pair[0]));
     const exactAfterIndexes = new Set(exactPairs.map((pair) => pair[1]));
-
-    const claimed = new Set();
-    const ownerCards = [];
-    const unmatchedReviewItems = [];
     const notesByPosition = [...notes].sort((left, right) => {
       const leftIndex = before.findIndex((paragraph) => paragraph.id === left.paragraphId);
       const rightIndex = before.findIndex((paragraph) => paragraph.id === right.paragraphId);
       return (leftIndex < 0 ? Infinity : leftIndex) - (rightIndex < 0 ? Infinity : rightIndex);
     });
 
+    const seedsByNote = new Map();
+    const claimantsByChange = new Map();
     for (const annotation of notesByPosition) {
-      const foreignAnchors = new Set(
-        notesByPosition
-          .filter((note) => note.id !== annotation.id && note.paragraphId)
-          .map((note) => note.paragraphId)
-      );
-      const seeds = seedsForAnnotation(annotation, changes, before).filter((change) => !claimed.has(change.id));
+      const seeds = seedsForAnnotation(annotation, changes, before);
+      seedsByNote.set(annotation.id, seeds);
+      for (const change of seeds) {
+        if (!claimantsByChange.has(change.id)) claimantsByChange.set(change.id, []);
+        claimantsByChange.get(change.id).push(annotation.id);
+      }
+    }
+
+    const exclusiveSeedsByNote = new Map(notesByPosition.map((note) => [note.id, []]));
+    const allSeededChangeIds = new Set();
+    for (const [changeId, annotationIds] of claimantsByChange) {
+      allSeededChangeIds.add(changeId);
+      const ownerId = preferSeedOwner(changes.find((change) => change.id === changeId), annotationIds, notesByPosition, before);
+      const change = changes.find((item) => item.id === changeId);
+      if (change && exclusiveSeedsByNote.has(ownerId)) exclusiveSeedsByNote.get(ownerId).push(change);
+    }
+
+    const claimed = new Set();
+    const ownerCards = [];
+    const unmatchedReviewItems = [];
+
+    for (const annotation of notesByPosition) {
+      const seeds = exclusiveSeedsByNote.get(annotation.id) || [];
       if (!seeds.length) {
         if (unchangedBefore.has(annotation.paragraphId)) {
           const beforeParagraph = before.find((paragraph) => paragraph.id === annotation.paragraphId);
@@ -476,12 +494,14 @@
         }
         continue;
       }
-      const cluster = expandOwnerCluster(seeds, changes, claimed, foreignAnchors, exactBeforeIndexes, exactAfterIndexes);
+      const foreignSeedIds = new Set([...allSeededChangeIds].filter((changeId) => !seeds.some((seed) => seed.id === changeId)));
+      const cluster = expandOwnerCluster(seeds, changes, claimed, foreignSeedIds, exactBeforeIndexes, exactAfterIndexes);
       for (const change of cluster) claimed.add(change.id);
       ownerCards.push(makeGroupedChange({
         id: `owner:${annotation.id}`,
         origin: "owner_requested",
         ownerReviews: [annotation],
+        sourceOwnerNoteId: annotation.id,
         hunks: cluster,
         beforeContent: before,
         afterContent: after

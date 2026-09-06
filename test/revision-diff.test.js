@@ -242,6 +242,63 @@ test("grouped rewrite keeps full old and new paragraphs for review", () => {
   assert.equal(layout.labels.ownerNote, "Owner Review Note");
 });
 
+test("CH001 wording and continuity notes remain independent Accept units", () => {
+  const wordingQuote = "“It is if you refuse food long enough.”";
+  const lyraQuote = "Lyra, on the far side of the room, made a small sound that might have been a laugh if she wanted to flatter Tarin. She had one knee up under the blanket and was already tying back her hair with practiced fingers.";
+  const before = pkg(1, [
+    paragraph("p004", "Boots on the floorboards. Miss Maera’s brisk voice stayed ordinary."),
+    paragraph("p005", "“Finally,” Tarin said from the next pallet."),
+    paragraph("p006", "Kael blinked at him. “That’s not how dying works.”"),
+    paragraph("p007", wordingQuote),
+    paragraph("p008", lyraQuote),
+    paragraph("p009", "“Move,” she said, and tossed Kael his shirt."),
+    paragraph("p040", "Bridge paragraph stays the same in both versions.")
+  ]);
+  const after = pkg(2, [
+    paragraph("p004", "Boots on the floorboards. Miss Maera’s brisk voice stayed ordinary."),
+    paragraph("p005", "The door opened without warning."),
+    paragraph("p006", "Lyra stepped into the room, already tying back her hair."),
+    paragraph("p007", "“If you refuse food long enough, it is.”"),
+    paragraph("p008", "“Are you two actually getting up?”"),
+    paragraph("p009", "Tarin pulled the blanket higher. “We were considering it.”"),
+    paragraph("p010", "Lyra made a small sound that might have been a laugh if she wanted to flatter him."),
+    paragraph("p040", "Bridge paragraph stays the same in both versions.")
+  ]);
+  const ownerReview = {
+    annotations: [
+      note("ann-wording", "p007", wordingQuote, "“If you refuse food long enough, it is.” change to this", "wording"),
+      note("ann-lyra", "p008", lyraQuote, "This implies Lyra sleeps in the same room. Have her enter instead.", "continuity")
+    ]
+  };
+  const model = diff.buildRevisionReviewModel(before, after, ownerReview);
+  const ownerCards = model.changes.filter((change) => change.origin === "owner_requested");
+  assert.equal(ownerCards.length, 2);
+  assert.deepEqual(ownerCards.map((change) => change.id).sort(), ["owner:ann-lyra", "owner:ann-wording"]);
+  assert.equal(ownerCards.find((change) => change.id === "owner:ann-wording").ownerReviews[0].id, "ann-wording");
+  assert.equal(ownerCards.find((change) => change.id === "owner:ann-lyra").ownerReviews[0].id, "ann-lyra");
+  assert.equal(ownerCards.every((change) => change.ownerReviews.length === 1), true);
+  const acceptedWording = revision.applyAccepted(model, ["owner:ann-wording"], []);
+  assert.equal(acceptedWording.changes.find((change) => change.id === "owner:ann-wording").accepted, true);
+  assert.equal(acceptedWording.changes.find((change) => change.id === "owner:ann-lyra").accepted, false);
+  const feedback = [{ id: "v2-1", paragraphId: "p007", selectedText: "x", selectionStart: 0, selectionEnd: 1, category: "wording", comment: "Still off.", status: "open", requiresCanonChange: false, revisionChangeId: "owner:ann-wording", revisionFeedbackKind: "comment" }];
+  const afterComment = revision.applyAccepted(model, ["owner:ann-wording", "owner:ann-lyra"], feedback);
+  assert.equal(afterComment.changes.find((change) => change.id === "owner:ann-wording").decision.state, "needs_revision");
+  assert.equal(afterComment.changes.find((change) => change.id === "owner:ann-wording").accepted, false);
+  assert.equal(afterComment.changes.find((change) => change.id === "owner:ann-lyra").accepted, true);
+  assert.equal(afterComment.changes.find((change) => change.id === "owner:ann-wording").decision.showAccept, false);
+  const cleared = revision.clearAccepted({ acceptedChangeIds: ["owner:ann-wording"] }, "owner:ann-wording");
+  assert.deepEqual(cleared.acceptedChangeIds, []);
+  assert.equal(revision.cardDecision({ accepted: true, feedbackNotes: feedback }).state, "needs_revision");
+  assert.equal(revision.cardDecision({ accepted: true, feedbackNotes: [{ ...feedback[0], revisionFeedbackKind: "flag" }] }).state, "flagged");
+  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-wording", "owner:ann-lyra"] }, []), true);
+  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, feedback), true);
+  assert.equal(revision.changesReviewResolved(model, { acceptedChangeIds: ["owner:ann-lyra"] }, []), false);
+  const next = revision.buildNextRevisionAnnotations(feedback);
+  assert.equal(next.length, 1);
+  assert.equal(next[0].id, "v2-1");
+  assert.equal(next[0].revisionChangeId, undefined);
+});
+
 test("CH001 Lyra continuity note groups multiple adjacent hunks into one card", () => {
   const lyraQuote = "Lyra, on the far side of the room, made a small sound that might have been a laugh if she wanted to flatter Tarin. She had one knee up under the blanket and was already tying back her hair with practiced fingers. Even half-dressed and still groggy, she looked more awake than the rest of them put together.";
   const before = pkg(1, [
